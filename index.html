@@ -1,0 +1,550 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Taretan Production - Dashboard Saham</title>
+    
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.28/jspdf.plugin.autotable.min.js"></script>
+    
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: { extend: { fontFamily: { sans: ['Inter', 'sans-serif'] } } }
+        }
+    </script>
+
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        .glass {
+            background: rgba(255, 255, 255, 0.85);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.6);
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+        }
+        .dark .glass {
+            background: rgba(30, 41, 59, 0.8);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        .fade-in { animation: fadeIn 0.5s ease-in-out; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(-20px); } to { opacity: 1; transform: translateY(0); } }
+        .blurred-text { filter: blur(6px); user-select: none; transition: filter 0.3s; }
+        .blurred-text:hover { filter: blur(0); }
+    </style>
+</head>
+<body class="flex h-screen overflow-hidden text-gray-700 bg-gray-100 dark:bg-gray-900 dark:text-gray-200 transition-colors duration-300">
+
+    <div id="loginOverlay" class="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/90 backdrop-blur-sm">
+        <div class="glass bg-white dark:bg-gray-800 p-8 rounded-2xl shadow-2xl w-full max-w-md text-center fade-in">
+            <div class="w-16 h-16 bg-blue-600 rounded-full mx-auto mb-6 shadow-lg flex items-center justify-center text-2xl text-white"><i class="fas fa-lock"></i></div>
+            <h2 class="text-2xl font-bold mb-2 dark:text-white">Selamat Datang</h2>
+            <p class="text-gray-500 mb-8 text-sm">Sistem Informasi Keuangan Taretan Production</p>
+
+            <div class="space-y-3">
+                <button onclick="attemptLogin('CEO')" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded-xl transition shadow-lg transform active:scale-95 flex items-center justify-center gap-2">
+                    <i class="fas fa-user-tie"></i> Login sebagai CEO
+                </button>
+                <div class="relative flex py-2 items-center">
+                    <div class="flex-grow border-t border-gray-300"></div>
+                    <span class="flex-shrink-0 mx-4 text-gray-400 text-xs">ATAU</span>
+                    <div class="flex-grow border-t border-gray-300"></div>
+                </div>
+                <button onclick="attemptLogin('INVESTOR')" class="w-full bg-white border border-gray-300 text-gray-700 font-bold py-3 px-4 rounded-xl hover:bg-gray-50 transition dark:bg-gray-700 dark:text-white dark:border-gray-600 dark:hover:bg-gray-600 flex items-center justify-center gap-2">
+                    <i class="fas fa-chart-line"></i> Masuk sebagai Investor
+                </button>
+            </div>
+            <p class="mt-6 text-xs text-gray-400">V8.0 Professional Report</p>
+        </div>
+    </div>
+
+    <aside class="w-64 bg-white dark:bg-gray-800 hidden md:flex flex-col border-r border-gray-200 dark:border-gray-700 z-10">
+        <div class="p-8 flex items-center gap-3">
+            <div class="w-8 h-8 rounded-full bg-blue-600 shadow-lg shrink-0 flex items-center justify-center text-white text-xs"><i class="fas fa-camera"></i></div>
+            <h1 class="font-bold text-lg tracking-wide leading-tight">TARETAN<br><span class="text-blue-600">PRODUCTION</span></h1>
+        </div>
+        
+        <nav class="flex-1 px-4 space-y-2">
+            <button onclick="switchView('dashboard')" id="nav-dashboard" class="nav-item w-full flex items-center gap-3 px-4 py-3 rounded-xl transition">
+                <i class="fas fa-chart-pie w-5 text-center"></i> <span>Dashboard</span>
+            </button>
+            <button onclick="switchView('laporan')" id="nav-laporan" class="nav-item w-full flex items-center gap-3 px-4 py-3 rounded-xl transition">
+                <i class="fas fa-file-alt w-5 text-center"></i> <span>Laporan</span>
+            </button>
+            <button onclick="switchView('settings')" id="nav-settings" class="nav-item w-full flex items-center gap-3 px-4 py-3 rounded-xl transition">
+                <i class="fas fa-cog w-5 text-center"></i> <span>Pengaturan</span>
+            </button>
+        </nav>
+
+        <div class="p-6 border-t dark:border-gray-700">
+            <div class="flex items-center gap-3">
+                <div class="w-10 h-10 rounded-full bg-gradient-to-tr from-blue-400 to-purple-500 flex items-center justify-center text-white text-sm font-bold">U</div>
+                <div class="flex-1 overflow-hidden">
+                    <p class="text-sm font-bold user-role-display truncate">Guest</p>
+                    <button onclick="logout()" class="text-xs text-red-500 hover:underline"><i class="fas fa-sign-out-alt"></i> Logout</button>
+                </div>
+            </div>
+        </div>
+    </aside>
+
+    <main class="flex-1 flex flex-col h-screen overflow-y-auto relative">
+        
+        <header class="flex justify-between items-center px-8 py-6 bg-white/50 dark:bg-gray-800/50 backdrop-blur sticky top-0 z-20">
+            <div>
+                <h2 id="page-title" class="text-2xl font-bold text-gray-800 dark:text-white">Dashboard</h2>
+                <div class="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400">
+                    <span class="w-2 h-2 rounded-full bg-green-500 animate-pulse"></span>
+                    <span class="user-role-display font-bold text-blue-600">Guest Mode</span>
+                </div>
+            </div>
+            <div class="flex gap-4">
+                <div id="uploadSection" class="ceo-only hidden gap-2">
+                    <input type="file" id="excelInput" accept=".xlsx, .csv" class="hidden">
+                    <label for="excelInput" class="cursor-pointer bg-blue-600 hover:bg-blue-700 text-white px-5 py-2.5 rounded-xl text-sm font-bold shadow-lg transition flex items-center gap-2 transform active:scale-95">
+                        <i class="fas fa-cloud-upload-alt"></i> <span>Upload Excel</span>
+                    </label>
+                </div>
+            </div>
+        </header>
+
+        <div class="p-8 pb-20">
+            
+            <section id="view-dashboard" class="view-section space-y-6">
+                <div id="dataStatus" class="hidden bg-blue-50 text-blue-600 px-4 py-2 rounded-lg text-sm border border-blue-200 flex items-center gap-2">
+                    <i class="fas fa-database"></i> Menampilkan data tersimpan.
+                </div>
+                <div class="grid grid-cols-1 md:grid-cols-4 gap-6">
+                    <div class="glass p-6 rounded-2xl border-l-4 border-blue-500 relative overflow-hidden group">
+                        <div class="absolute right-4 top-4 text-blue-100 dark:text-gray-700 text-6xl opacity-20"><i class="fas fa-wallet"></i></div>
+                        <p class="text-xs font-bold text-gray-400 uppercase">Pengahasilan Terakhir</p>
+                        <p class="text-2xl font-bold text-gray-800 dark:text-white mt-2 price-value" id="dashPrice">Rp 0</p>
+                    </div>
+                    <div class="glass p-6 rounded-2xl border-l-4 border-purple-500 relative overflow-hidden">
+                        <div class="absolute right-4 top-4 text-purple-100 dark:text-gray-700 text-6xl opacity-20"><i class="fas fa-layer-group"></i></div>
+                        <p class="text-xs font-bold text-gray-400 uppercase">Total Saham (Lot)</p>
+                        <p class="text-2xl font-bold text-gray-800 dark:text-white mt-2" id="dashVolume">0</p>
+                    </div>
+                    <div class="glass p-6 rounded-2xl border-l-4 border-green-500 relative overflow-hidden">
+                        <div class="absolute right-4 top-4 text-green-100 dark:text-gray-700 text-6xl opacity-20"><i class="fas fa-arrow-up"></i></div>
+                        <p class="text-xs font-bold text-gray-400 uppercase">Tertinggi</p>
+                        <p class="text-2xl font-bold text-green-600 mt-2 price-value" id="dashHigh">Rp 0</p>
+                    </div>
+                    <div class="glass p-6 rounded-2xl border-l-4 border-red-500 relative overflow-hidden">
+                        <div class="absolute right-4 top-4 text-red-100 dark:text-gray-700 text-6xl opacity-20"><i class="fas fa-arrow-down"></i></div>
+                        <p class="text-xs font-bold text-gray-400 uppercase">Terendah</p>
+                        <p class="text-2xl font-bold text-red-500 mt-2 price-value" id="dashLow">Rp 0</p>
+                    </div>
+                </div>
+                <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                    <div class="glass lg:col-span-2 p-6 rounded-2xl bg-white dark:bg-gray-800">
+                        <div class="flex justify-between items-center mb-6">
+                            <h3 class="font-bold text-lg dark:text-white"><i class="fas fa-chart-line text-blue-500 mr-2"></i>Grafik Penghasilan</h3>
+                            <div class="flex bg-gray-100 dark:bg-gray-700 p-1 rounded-lg gap-1">
+                                <button onclick="filterPeriod(3, this)" class="period-btn text-xs px-3 py-1 rounded-md transition hover:bg-white dark:hover:bg-gray-600">3M</button>
+                                <button onclick="filterPeriod(6, this)" class="period-btn text-xs px-3 py-1 rounded-md transition hover:bg-white dark:hover:bg-gray-600">6M</button>
+                                <button onclick="filterPeriod(12, this)" class="period-btn active text-xs bg-white dark:bg-gray-600 shadow-sm px-3 py-1 rounded-md font-bold text-blue-600">1Y</button>
+                            </div>
+                        </div>
+                        <div class="relative h-72 w-full">
+                            <canvas id="priceChart"></canvas>
+                        </div>
+                    </div>
+                    <div class="glass p-6 rounded-2xl bg-white dark:bg-gray-800 flex flex-col">
+                        <h3 class="font-bold text-lg mb-4 dark:text-white"><i class="fas fa-chart-bar text-purple-500 mr-2"></i>Volume Saham</h3>
+                        <div class="relative flex-1 w-full min-h-[200px]">
+                            <canvas id="volumeChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+                <div class="glass p-6 rounded-2xl bg-white dark:bg-gray-800">
+                    <h3 class="font-bold text-lg mb-4 dark:text-white">Rincian Data</h3>
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-left text-sm">
+                            <thead class="text-gray-400 border-b dark:border-gray-700">
+                                <tr>
+                                    <th class="pb-3 pl-2">Bulan</th>
+                                    <th class="pb-3">Keterangan</th>
+                                    <th class="pb-3">Penghasilan</th>
+                                    <th class="pb-3 text-right pr-2">Total Saham</th>
+                                </tr>
+                            </thead>
+                            <tbody id="dashboardTableBody" class="text-gray-600 dark:text-gray-300">
+                                <tr><td colspan="4" class="py-8 text-center text-gray-400">Belum ada data.</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+
+            <section id="view-laporan" class="view-section hidden space-y-6">
+                <div class="glass p-8 rounded-2xl bg-white dark:bg-gray-800">
+                    <div class="flex flex-col md:flex-row justify-between md:items-center gap-4 mb-6">
+                        <div>
+                            <h3 class="font-bold text-xl dark:text-white text-gray-800">Laporan Bulanan</h3>
+                            <p class="text-sm text-gray-500">Pilih format unduhan di bawah ini.</p>
+                        </div>
+                        <div class="flex gap-3">
+                            <button onclick="downloadExcel()" class="bg-green-600 text-white px-5 py-2.5 rounded-xl text-sm font-bold hover:bg-green-700 flex items-center gap-2 shadow-lg hover:shadow-green-500/30 transition transform active:scale-95">
+                                <i class="fas fa-file-excel"></i> Download Excel
+                            </button>
+                            <button onclick="downloadPDF()" class="bg-red-600 text-white px-5 py-2.5 rounded-xl text-sm font-bold hover:bg-red-700 flex items-center gap-2 shadow-lg hover:shadow-red-500/30 transition transform active:scale-95">
+                                <i class="fas fa-file-pdf"></i> Download PDF
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <div class="overflow-x-auto rounded-xl border dark:border-gray-700">
+                        <table class="w-full text-left text-sm">
+                            <thead class="bg-gray-50 dark:bg-gray-700 text-gray-500 dark:text-gray-300 uppercase font-bold text-xs tracking-wider">
+                                <tr>
+                                    <th class="p-4 border-b dark:border-gray-600">Bulan & Tahun</th>
+                                    <th class="p-4 border-b dark:border-gray-600">Penghasilan (Rp)</th>
+                                    <th class="p-4 text-right border-b dark:border-gray-600">Volume (Lot)</th>
+                                </tr>
+                            </thead>
+                            <tbody id="reportTableBody" class="divide-y dark:divide-gray-700 text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+
+            <section id="view-settings" class="view-section hidden space-y-6 max-w-2xl mx-auto">
+                <div class="glass p-8 rounded-2xl bg-white dark:bg-gray-800 shadow-xl">
+                    <h3 class="font-bold text-xl mb-6 dark:text-white flex items-center gap-2">
+                        <i class="fas fa-cog"></i> Pengaturan
+                    </h3>
+                    
+                    <div class="space-y-6">
+                        <div class="flex justify-between items-center">
+                            <div>
+                                <h4 class="font-medium dark:text-white"><i class="fas fa-moon mr-2 text-blue-500"></i>Dark Mode</h4>
+                                <p class="text-xs text-gray-500">Ubah tampilan menjadi gelap.</p>
+                            </div>
+                            <button onclick="toggleDarkMode()" class="relative inline-flex items-center h-6 rounded-full w-11 bg-gray-200 dark:bg-blue-600 transition-colors">
+                                <span class="translate-x-1 dark:translate-x-6 inline-block w-4 h-4 transform bg-white rounded-full transition-transform"></span>
+                            </button>
+                        </div>
+
+                        <div class="flex justify-between items-center">
+                            <div>
+                                <h4 class="font-medium dark:text-white"><i class="fas fa-eye-slash mr-2 text-purple-500"></i>Mode Privasi</h4>
+                                <p class="text-xs text-gray-500">Buramkan nominal uang (Anti-Intip).</p>
+                            </div>
+                            <button onclick="togglePrivacy()" id="btnPrivacy" class="relative inline-flex items-center h-6 rounded-full w-11 bg-gray-200 transition-colors">
+                                <span id="togglePrivacyDot" class="translate-x-1 inline-block w-4 h-4 transform bg-white rounded-full transition-transform"></span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <hr class="my-8 border-gray-200 dark:border-gray-700">
+
+                    <div class="ceo-only hidden space-y-6">
+                        <h4 class="text-xs font-bold text-gray-400 uppercase tracking-wider mb-4">Area CEO</h4>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Ganti Nama CEO</label>
+                            <div class="flex gap-2">
+                                <input type="text" id="inputName" class="flex-1 p-2.5 border rounded-xl dark:bg-gray-700 dark:border-gray-600 dark:text-white" placeholder="Nama Anda...">
+                                <button onclick="saveName()" class="bg-blue-600 text-white px-5 rounded-xl text-sm font-medium hover:bg-blue-700">Simpan</button>
+                            </div>
+                        </div>
+
+                        <div class="flex justify-between items-center p-4 bg-blue-50 dark:bg-blue-900/20 rounded-xl border border-blue-100 dark:border-blue-800">
+                            <div>
+                                <h4 class="font-medium text-blue-800 dark:text-blue-300"><i class="fas fa-save mr-1"></i> Backup Data</h4>
+                                <p class="text-xs text-blue-600 dark:text-blue-400">Download data agar aman.</p>
+                            </div>
+                            <button onclick="backupData()" class="bg-white dark:bg-transparent border border-blue-200 text-blue-600 px-3 py-2 rounded-lg text-sm font-bold hover:bg-blue-50">Download .json</button>
+                        </div>
+
+                        <div>
+                             <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"><i class="fas fa-upload mr-1"></i> Restore Data (Upload Backup)</label>
+                             <input type="file" id="backupInput" accept=".json" class="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"/>
+                        </div>
+
+                        <div class="flex justify-between items-center p-4 bg-red-50 dark:bg-red-900/20 rounded-xl border border-red-100 dark:border-red-800 mt-4">
+                            <div>
+                                <h4 class="font-medium text-red-600 dark:text-red-400"><i class="fas fa-trash-alt mr-1"></i> Reset Pabrik</h4>
+                                <p class="text-xs text-red-400">Hapus semua data permanen.</p>
+                            </div>
+                            <button onclick="clearData()" class="bg-white dark:bg-transparent border border-red-200 text-red-500 px-3 py-2 rounded-lg text-sm font-bold hover:bg-red-50">Reset</button>
+                        </div>
+                    </div>
+
+                </div>
+            </section>
+        </div>
+    </main>
+
+    <script>
+        // --- VARIABLES & INIT ---
+        let rawData = [];
+        let chartPrice = null;
+        let chartVolume = null;
+        let isPrivacyOn = false;
+        const STORAGE_KEY = 'TARETAN_SAHAM_DATA_V2';
+        const NAME_KEY = 'TARETAN_USERNAME';
+        const PASSWORD_CEO = "admin123";
+
+        const formatRupiah = (num) => new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(num);
+
+        window.onload = function() {
+            switchView('dashboard');
+            const savedName = localStorage.getItem(NAME_KEY);
+            if(savedName) {
+                document.querySelectorAll('.user-name-display').forEach(el => el.innerText = savedName);
+                document.getElementById('inputName').value = savedName;
+            }
+            const savedData = localStorage.getItem(STORAGE_KEY);
+            if(savedData) {
+                try {
+                    rawData = JSON.parse(savedData);
+                    if(rawData.length > 0) {
+                        document.getElementById('dataStatus').classList.remove('hidden');
+                        updateDashboard(rawData);
+                        generateReport(rawData);
+                    }
+                } catch(e) { console.error("Data error", e); }
+            }
+        };
+
+        // --- NAVIGATION & LOGIC ---
+        function switchView(viewId) {
+            document.querySelectorAll('.view-section').forEach(el => el.classList.add('hidden'));
+            document.getElementById(`view-${viewId}`).classList.remove('hidden');
+            document.getElementById('page-title').innerText = viewId.charAt(0).toUpperCase() + viewId.slice(1);
+            
+            document.querySelectorAll('.nav-item').forEach(btn => {
+                btn.classList.remove('bg-blue-50', 'text-blue-600', 'font-bold', 'dark:bg-gray-700', 'dark:text-blue-400');
+                btn.classList.add('text-gray-400', 'hover:bg-gray-50', 'hover:text-gray-600', 'dark:hover:bg-gray-700', 'dark:hover:text-gray-300');
+            });
+            const activeBtn = document.getElementById(`nav-${viewId}`);
+            if(activeBtn) {
+                activeBtn.classList.remove('text-gray-400', 'hover:bg-gray-50', 'hover:text-gray-600', 'dark:hover:bg-gray-700', 'dark:hover:text-gray-300');
+                activeBtn.classList.add('bg-blue-50', 'text-blue-600', 'font-bold', 'dark:bg-gray-700', 'dark:text-blue-400');
+            }
+            if(viewId === 'dashboard' && rawData.length > 0) renderCharts(rawData);
+        }
+
+        function attemptLogin(role) {
+            if (role === 'CEO') {
+                const pass = prompt("Masukkan Password CEO:");
+                if (pass === PASSWORD_CEO) setRole('CEO');
+                else alert("Password Salah!");
+            } else { setRole('INVESTOR'); }
+        }
+
+        function setRole(role) {
+            document.getElementById('loginOverlay').classList.add('hidden');
+            const displayRole = role === 'CEO' ? 'CEO (Admin)' : 'Investor (Viewer)';
+            document.querySelectorAll('.user-role-display').forEach(el => el.innerText = displayRole);
+            const ceoElements = document.querySelectorAll('.ceo-only');
+            if (role === 'CEO') ceoElements.forEach(el => el.classList.remove('hidden'));
+            else ceoElements.forEach(el => el.classList.add('hidden'));
+            alert(`Login Sukses: ${displayRole}`);
+        }
+
+        function logout() { location.reload(); }
+        function toggleDarkMode() { document.documentElement.classList.toggle('dark'); }
+        function togglePrivacy() {
+            isPrivacyOn = !isPrivacyOn;
+            const btn = document.getElementById('btnPrivacy');
+            const dot = document.getElementById('togglePrivacyDot');
+            if(isPrivacyOn) {
+                btn.classList.remove('bg-gray-200'); btn.classList.add('bg-purple-500');
+                dot.classList.add('translate-x-6'); dot.classList.remove('translate-x-1');
+                document.querySelectorAll('.price-value, .money-text').forEach(el => el.classList.add('blurred-text'));
+            } else {
+                btn.classList.add('bg-gray-200'); btn.classList.remove('bg-purple-500');
+                dot.classList.remove('translate-x-6'); dot.classList.add('translate-x-1');
+                document.querySelectorAll('.price-value, .money-text').forEach(el => el.classList.remove('blurred-text'));
+            }
+        }
+        function saveName() { const name = document.getElementById('inputName').value; if(name) { localStorage.setItem(NAME_KEY, name); document.querySelectorAll('.user-name-display').forEach(el => el.innerText = name); alert("Nama tersimpan!"); } }
+        function clearData() { if(confirm("PERINGATAN CEO: Hapus permanen?")) { localStorage.removeItem(STORAGE_KEY); rawData = []; location.reload(); } }
+
+        function backupData() {
+            if(rawData.length === 0) { alert("Tidak ada data."); return; }
+            const dataStr = JSON.stringify(rawData);
+            const blob = new Blob([dataStr], { type: "application/json" });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a'); a.href = url; a.download = "Backup_Taretan_" + new Date().toISOString().slice(0,10) + ".json"; a.click();
+        }
+        document.getElementById('backupInput').addEventListener('change', (e) => {
+            const file = e.target.files[0]; if(!file) return;
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                try { const json = JSON.parse(e.target.result); if(Array.isArray(json)) { rawData = json; localStorage.setItem(STORAGE_KEY, JSON.stringify(rawData)); updateDashboard(rawData); generateReport(rawData); alert("Restore Sukses!"); } else alert("Format Salah."); } catch(err) { alert("File Rusak."); }
+            }; reader.readAsText(file);
+        });
+
+        document.getElementById('excelInput').addEventListener('change', (e) => {
+            const file = e.target.files[0]; if (!file) return;
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                const data = new Uint8Array(e.target.result);
+                const workbook = XLSX.read(data, { type: 'array' });
+                const worksheet = workbook.Sheets[workbook.SheetNames[0]];
+                const rawRows = XLSX.utils.sheet_to_json(worksheet, { header: 1, raw: false });
+                processSmartData(rawRows);
+            }; reader.readAsArrayBuffer(file);
+        });
+
+        function processSmartData(rows) {
+            let processed = []; let incomeRow = null; let volumeRow = null;
+            rows.forEach(row => {
+                if(row && row.length > 0) {
+                    const label = String(row[1]).toLowerCase().trim();
+                    if(label.includes('penghasilan') || label.includes('pengahasilan')) incomeRow = row;
+                    if(label.includes('jumlah saham')) volumeRow = row;
+                }
+            });
+            if (incomeRow) {
+                const monthMap = [{name:'Januari',idx:3,date:'2025-01-30'},{name:'Februari',idx:5,date:'2025-02-28'},{name:'Maret',idx:7,date:'2025-03-30'},{name:'April',idx:9,date:'2025-04-30'},{name:'Mei',idx:11,date:'2025-05-30'},{name:'Juni',idx:13,date:'2025-06-30'},{name:'Juli',idx:15,date:'2025-07-30'},{name:'Agustus',idx:17,date:'2025-08-30'},{name:'September',idx:19,date:'2025-09-30'},{name:'Oktober',idx:21,date:'2025-10-30'},{name:'November',idx:23,date:'2025-11-30'},{name:'Desember',idx:25,date:'2025-12-30'}];
+                monthMap.forEach(m => {
+                    let closeVal = incomeRow[m.idx]; if(typeof closeVal === 'string') closeVal = parseFloat(closeVal.replace(/[^0-9]/g, ''));
+                    let volVal = volumeRow ? volumeRow[m.idx] : 0; if(typeof volVal === 'string') volVal = parseFloat(volVal.replace(/[^0-9]/g, ''));
+                    if (!isNaN(closeVal) && closeVal !== 0) processed.push({ date: m.date, code: 'TRTN', close: closeVal, volume: volVal || 0 });
+                });
+            } else {
+                 const header = rows[0].map(h => String(h).toLowerCase());
+                 const dateIdx = header.indexOf('tanggal'); const closeIdx = header.indexOf('close'); const volIdx = header.indexOf('volume');
+                 if (dateIdx > -1 && closeIdx > -1) {
+                    for(let i=1; i<rows.length; i++) { const r = rows[i]; if(r[dateIdx]) processed.push({ date: r[dateIdx], code: 'SAHAM', close: parseFloat(r[closeIdx])||0, volume: parseFloat(r[volIdx])||0 }); }
+                 }
+            }
+            if (processed.length === 0) { alert("Gagal membaca Excel!"); return; }
+            processed.sort((a, b) => new Date(a.date) - new Date(b.date));
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(processed));
+            rawData = processed;
+            alert("Upload Berhasil!");
+            document.getElementById('dataStatus').classList.remove('hidden');
+            updateDashboard(rawData);
+            generateReport(rawData);
+        }
+
+        function updateDashboard(data) {
+            const prices = data.map(d => d.close); const last = data[data.length - 1];
+            document.getElementById('dashPrice').innerText = formatRupiah(last.close);
+            document.getElementById('dashVolume').innerText = new Intl.NumberFormat('id-ID').format(last.volume);
+            document.getElementById('dashHigh').innerText = formatRupiah(Math.max(...prices));
+            document.getElementById('dashLow').innerText = formatRupiah(Math.min(...prices));
+            const tbody = document.getElementById('dashboardTableBody'); tbody.innerHTML = '';
+            data.slice().reverse().forEach(row => {
+                const d = new Date(row.date); const monthName = d.toLocaleString('id-ID', { month: 'long', year: 'numeric' });
+                tbody.innerHTML += `<tr class="border-b dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700 transition"><td class="py-3 pl-2">${monthName}</td><td class="py-3 font-bold text-blue-600">Laporan</td><td class="py-3 font-medium text-green-600 money-text ${isPrivacyOn?'blurred-text':''}">${formatRupiah(row.close)}</td><td class="py-3 pr-2 text-right text-gray-500">${new Intl.NumberFormat('id-ID').format(row.volume)}</td></tr>`;
+            });
+            renderCharts(data); if(isPrivacyOn) togglePrivacy();
+        }
+
+        function filterPeriod(months, btnElement) {
+            if(rawData.length === 0) return;
+            document.querySelectorAll('.period-btn').forEach(btn => { btn.classList.remove('bg-white', 'shadow-sm', 'font-bold', 'text-blue-600', 'dark:bg-gray-600'); btn.classList.add('hover:bg-white', 'dark:hover:bg-gray-600'); });
+            if(btnElement) { btnElement.classList.remove('hover:bg-white', 'dark:hover:bg-gray-600'); btnElement.classList.add('bg-white', 'shadow-sm', 'font-bold', 'text-blue-600', 'dark:bg-gray-600'); }
+            const lastData = rawData[rawData.length - 1]; const cutoff = new Date(lastData.date); cutoff.setMonth(cutoff.getMonth() - months);
+            renderCharts(rawData.filter(d => new Date(d.date) >= cutoff));
+        }
+
+        function renderCharts(data) {
+            const labels = data.map(d => { const date = new Date(d.date); return date.toLocaleString('id-ID', { month: 'short' }); });
+            const ctxPrice = document.getElementById('priceChart').getContext('2d');
+            if(chartPrice) chartPrice.destroy();
+            let gradient = ctxPrice.createLinearGradient(0, 0, 0, 400); gradient.addColorStop(0, 'rgba(16, 185, 129, 0.2)'); gradient.addColorStop(1, 'rgba(16, 185, 129, 0.0)');
+            chartPrice = new Chart(ctxPrice, { type: 'line', data: { labels: labels, datasets: [{ label: 'Penghasilan', data: data.map(d => d.close), borderColor: '#10b981', backgroundColor: gradient, borderWidth: 2, pointRadius: 4, fill: true, tension: 0.3 }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: { grid: { display: false } }, y: { grid: { borderDash: [5, 5] }, ticks: { callback: function(value){ return value/1000 + 'k'; } } } } } });
+            const ctxVol = document.getElementById('volumeChart').getContext('2d');
+            if(chartVolume) chartVolume.destroy();
+            chartVolume = new Chart(ctxVol, { type: 'bar', data: { labels: labels, datasets: [{ label: 'Total Saham', data: data.map(d => d.volume), backgroundColor: '#93c5fd', borderRadius: 4 }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: { display: false }, y: { display: false } } } });
+        }
+
+        function generateReport(data) {
+            const tbody = document.getElementById('reportTableBody'); tbody.innerHTML = '';
+            data.forEach(row => { const d = new Date(row.date); const m = d.toLocaleString('id-ID', { month: 'long', year: 'numeric' }); tbody.innerHTML += `<tr class="hover:bg-gray-50 dark:hover:bg-gray-700 transition"><td class="p-4 font-bold text-blue-600">${m}</td><td class="p-4 font-medium text-green-600 money-text ${isPrivacyOn?'blurred-text':''}">${formatRupiah(row.close)}</td><td class="p-4 text-right font-mono text-gray-500">${new Intl.NumberFormat('id-ID').format(row.volume)}</td></tr>`; });
+        }
+
+        // --- NEW: PROFESSIONAL DOWNLOAD FUNCTIONS ---
+
+        function downloadExcel() {
+            if(rawData.length === 0) { alert("Data kosong!"); return; }
+            
+            // 1. Format Data untuk Excel (Supaya Rapi)
+            const excelData = rawData.map(row => ({
+                "Tanggal": row.date,
+                "Bulan": new Date(row.date).toLocaleString('id-ID', { month: 'long', year: 'numeric' }),
+                "Penghasilan (IDR)": row.close, // Biarkan angka agar bisa dihitung excel
+                "Volume (Lot)": row.volume
+            }));
+
+            const ws = XLSX.utils.json_to_sheet(excelData);
+
+            // 2. Atur Lebar Kolom (Supaya Rapi saat dibuka)
+            const wscols = [
+                {wch: 15}, // Lebar Tanggal
+                {wch: 20}, // Lebar Bulan
+                {wch: 25}, // Lebar Penghasilan
+                {wch: 15}  // Lebar Volume
+            ];
+            ws['!cols'] = wscols;
+
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, "Laporan Keuangan");
+            XLSX.writeFile(wb, "Laporan_Taretan_" + new Date().toISOString().slice(0,10) + ".xlsx");
+        }
+
+        function downloadPDF() {
+            if(rawData.length === 0) { alert("Data kosong!"); return; }
+            const { jsPDF } = window.jspdf;
+            const doc = new jsPDF();
+
+            // Header
+            doc.setFontSize(18);
+            doc.setTextColor(40, 40, 40);
+            doc.text("Laporan Keuangan", 14, 22);
+            
+            doc.setFontSize(11);
+            doc.setTextColor(100, 100, 100);
+            doc.text("Taretan Production", 14, 28);
+            doc.text("Dicetak pada: " + new Date().toLocaleString('id-ID'), 14, 34);
+
+            // Tabel
+            const tableColumn = ["Bulan", "Penghasilan (IDR)", "Volume (Lot)"];
+            const tableRows = [];
+
+            rawData.forEach(row => {
+                const rowData = [
+                    new Date(row.date).toLocaleString('id-ID', { month: 'long', year: 'numeric' }),
+                    formatRupiah(row.close),
+                    new Intl.NumberFormat('id-ID').format(row.volume)
+                ];
+                tableRows.push(rowData);
+            });
+
+            doc.autoTable({
+                head: [tableColumn],
+                body: tableRows,
+                startY: 40,
+                theme: 'grid',
+                headStyles: { fillColor: [37, 99, 235], textColor: 255, fontStyle: 'bold' }, // Warna Biru Header
+                columnStyles: {
+                    0: { fontStyle: 'bold' },
+                    1: { halign: 'right' }, // Uang rata kanan
+                    2: { halign: 'right' }  // Angka rata kanan
+                },
+                styles: { fontSize: 10, cellPadding: 3 }
+            });
+
+            // Footer
+            const finalY = doc.lastAutoTable.finalY || 40;
+            doc.setFontSize(9);
+            doc.setTextColor(150);
+            doc.text("Dokumen ini dihasilkan secara otomatis oleh sistem Taretan.", 14, finalY + 10);
+
+            doc.save("Laporan_Taretan_" + new Date().toISOString().slice(0,10) + ".pdf");
+        }
+    </script>
+</body>
+</html>
