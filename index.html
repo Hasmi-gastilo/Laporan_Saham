@@ -11,7 +11,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.28/jspdf.plugin.autotable.min.js"></script>
     
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700;900&display=swap" rel="stylesheet">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     
     <script>
@@ -38,7 +38,6 @@
         .blurred-text { filter: blur(6px); user-select: none; transition: filter 0.3s; }
         .blurred-text:hover { filter: blur(0); }
         
-        /* Navigasi Bawah HP yang Lebih Cantik */
         .mobile-bottom-nav {
             position: fixed; bottom: 0; left: 0; right: 0;
             background: rgba(255, 255, 255, 0.98);
@@ -58,8 +57,8 @@
     <div id="loginOverlay" class="fixed inset-0 z-[60] flex items-center justify-center bg-gray-900/95 backdrop-blur-sm p-4">
         <div class="glass bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-2xl w-full max-w-sm text-center fade-in">
             <div class="w-16 h-16 bg-blue-600 rounded-full mx-auto mb-6 shadow-lg flex items-center justify-center text-2xl text-white"><i class="fas fa-camera"></i></div>
-            <h2 class="text-xl font-bold mb-2 dark:text-white">Taretan Production</h2>
-            <p class="text-gray-500 mb-6 text-sm">Sistem Keuangan Mobile & Desktop</p>
+            <h2 class="text-2xl font-black mb-1 dark:text-white tracking-tight">TARETAN <span class="text-blue-600">PRODUCTION</span></h2>
+            <p class="text-gray-500 mb-6 text-sm">Sistem Keuangan & Saham</p>
 
             <div class="space-y-3">
                 <button onclick="attemptLogin('CEO')" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded-xl shadow-lg active:scale-95 flex items-center justify-center gap-2">
@@ -74,7 +73,7 @@
                     <i class="fas fa-chart-line"></i> Masuk Investor
                 </button>
             </div>
-            <p class="mt-6 text-xs text-gray-400">V10.0 Final Polished</p>
+            <p class="mt-6 text-xs text-gray-400">V12.0 Mobile Brand Fix</p>
         </div>
     </div>
 
@@ -107,26 +106,35 @@
 
     <main class="flex-1 flex flex-col h-screen overflow-y-auto relative pb-24 md:pb-0">
         
-        <header class="flex flex-col md:flex-row justify-between items-start md:items-center px-6 py-4 bg-white/50 dark:bg-gray-800/50 backdrop-blur sticky top-0 z-20 gap-4">
-            <div class="flex justify-between w-full md:w-auto items-center">
+        <header class="flex flex-col px-6 py-4 bg-white/50 dark:bg-gray-800/50 backdrop-blur sticky top-0 z-20 gap-3 shadow-sm md:shadow-none">
+            
+            <div class="md:hidden flex items-center justify-between pb-2 border-b border-gray-200 dark:border-gray-700">
+                <div class="flex items-center gap-2">
+                    <div class="w-8 h-8 rounded-full bg-blue-600 shadow-md flex items-center justify-center text-white text-xs"><i class="fas fa-camera"></i></div>
+                    <div>
+                        <h1 class="font-black text-lg leading-none text-gray-800 dark:text-white tracking-tight">TARETAN</h1>
+                        <p class="text-[10px] font-bold text-blue-600 tracking-widest">PRODUCTION</p>
+                    </div>
+                </div>
+                <button onclick="logout()" class="text-red-500 text-xs border border-red-200 p-2 rounded-lg hover:bg-red-50">
+                    <i class="fas fa-sign-out-alt"></i>
+                </button>
+            </div>
+
+            <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
                 <div>
                     <h2 id="page-title" class="text-xl font-bold text-gray-800 dark:text-white">Dashboard</h2>
                     <div class="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
                         <span class="user-role-display font-bold text-blue-600">Guest Mode</span>
                     </div>
                 </div>
-                <button onclick="logout()" class="md:hidden text-red-500 text-xs border border-red-200 p-2 rounded-lg hover:bg-red-50">
-                    <i class="fas fa-sign-out-alt"></i>
-                </button>
-            </div>
 
-            <div id="uploadSection" class="ceo-only hidden w-full md:w-auto">
-                <input type="file" id="excelInput" 
-                       accept=".xlsx, .xls, .csv, application/vnd.openxmlformats-officedocument.spreadsheetml.sheet, application/vnd.ms-excel" 
-                       class="hidden">
-                <label for="excelInput" class="cursor-pointer bg-blue-600 hover:bg-blue-700 text-white w-full md:w-auto px-4 py-3 rounded-xl text-sm font-bold shadow-lg transition flex items-center justify-center gap-2 active:scale-95">
-                    <i class="fas fa-cloud-upload-alt"></i> <span>Upload Excel (HP/PC)</span>
-                </label>
+                <div id="uploadSection" class="ceo-only hidden w-full md:w-auto">
+                    <input type="file" id="excelInput" class="hidden"> 
+                    <label for="excelInput" class="cursor-pointer bg-blue-600 hover:bg-blue-700 text-white w-full md:w-auto px-4 py-3 rounded-xl text-sm font-bold shadow-lg transition flex items-center justify-center gap-2 active:scale-95">
+                        <i class="fas fa-cloud-upload-alt"></i> <span>Upload Excel</span>
+                    </label>
+                </div>
             </div>
         </header>
 
@@ -285,38 +293,30 @@
 
         // --- NAVIGATION & BLUE EFFECT LOGIC ---
         function switchView(viewId) {
-            // 1. Sembunyikan semua halaman
             document.querySelectorAll('.view-section').forEach(el => el.classList.add('hidden'));
-            // 2. Munculkan halaman yang dipilih
             document.getElementById(`view-${viewId}`).classList.remove('hidden');
-            // 3. Update Judul
             document.getElementById('page-title').innerText = viewId.charAt(0).toUpperCase() + viewId.slice(1);
             
-            // 4. RESET Tampilan Menu (Hilangkan Biru)
-            // Desktop
+            // RESET Menu
             document.querySelectorAll('.nav-item').forEach(btn => {
                 btn.classList.remove('bg-blue-50', 'text-blue-600', 'font-bold', 'dark:bg-gray-700', 'dark:text-blue-400');
                 btn.classList.add('text-gray-400');
             });
-            // Mobile
             document.querySelectorAll('.mobile-bottom-nav button').forEach(btn => {
                 btn.classList.remove('text-blue-600', 'bg-blue-50', 'font-bold', 'dark:bg-gray-800', 'dark:text-blue-400');
                 btn.classList.add('text-gray-400');
             });
 
-            // 5. AKTIFKAN Tampilan Menu (Kasih Warna Biru)
-            // Desktop
+            // ACTIVE Menu
             const deskBtn = document.getElementById(`nav-${viewId}`);
             if(deskBtn) deskBtn.classList.add('bg-blue-50', 'text-blue-600', 'font-bold', 'dark:bg-gray-700', 'dark:text-blue-400');
             
-            // Mobile (Ini Efek Biru di HP)
             const mobBtn = document.getElementById(`mob-nav-${viewId}`);
             if(mobBtn) {
                 mobBtn.classList.remove('text-gray-400');
                 mobBtn.classList.add('text-blue-600', 'bg-blue-50', 'font-bold', 'dark:bg-gray-800', 'dark:text-blue-400');
             }
 
-            // 6. Jika Dashboard, render ulang grafik
             if(viewId === 'dashboard' && rawData.length > 0) renderCharts(rawData);
         }
 
@@ -345,13 +345,21 @@
         document.getElementById('excelInput').addEventListener('change', (e) => {
             const file = e.target.files[0];
             if (!file) return;
+
+            // Feedback Visual
+            alert("Memproses file: " + file.name);
+
             const reader = new FileReader();
             reader.onload = (e) => {
-                const data = new Uint8Array(e.target.result);
-                const workbook = XLSX.read(data, { type: 'array' });
-                const worksheet = workbook.Sheets[workbook.SheetNames[0]];
-                const rawRows = XLSX.utils.sheet_to_json(worksheet, { header: 1, raw: false });
-                processSmartData(rawRows);
+                try {
+                    const data = new Uint8Array(e.target.result);
+                    const workbook = XLSX.read(data, { type: 'array' });
+                    const worksheet = workbook.Sheets[workbook.SheetNames[0]];
+                    const rawRows = XLSX.utils.sheet_to_json(worksheet, { header: 1, raw: false });
+                    processSmartData(rawRows);
+                } catch (error) {
+                    alert("Gagal membaca file: " + error.message);
+                }
             };
             reader.readAsArrayBuffer(file);
         });
@@ -363,9 +371,9 @@
             
             rows.forEach(row => {
                 if(row && row.length > 0) {
-                    const label = String(row[1]).toLowerCase().trim();
-                    if(label.includes('penghasilan') || label.includes('pengahasilan')) incomeRow = row;
-                    if(label.includes('jumlah saham')) volumeRow = row;
+                    const strRow = JSON.stringify(row).toLowerCase();
+                    if(strRow.includes('penghasilan') || strRow.includes('pengahasilan')) incomeRow = row;
+                    if(strRow.includes('jumlah saham')) volumeRow = row;
                 }
             });
 
@@ -378,27 +386,32 @@
                     { name: 'September', idx: 19, date: '2025-09-30' }, { name: 'Oktober', idx: 21, date: '2025-10-30' },
                     { name: 'November', idx: 23, date: '2025-11-30' }, { name: 'Desember', idx: 25, date: '2025-12-30' }
                 ];
+                
                 monthMap.forEach(m => {
                     let closeVal = incomeRow[m.idx]; 
                     if(typeof closeVal === 'string') closeVal = parseFloat(closeVal.replace(/[^0-9]/g, ''));
+                    else if (typeof closeVal === 'number') closeVal = closeVal;
+                    else closeVal = 0;
+
                     let volVal = volumeRow ? volumeRow[m.idx] : 0;
                     if(typeof volVal === 'string') volVal = parseFloat(volVal.replace(/[^0-9]/g, ''));
-                    if (!isNaN(closeVal) && closeVal !== 0) processed.push({ date: m.date, code: 'TRTN', close: closeVal, volume: volVal || 0 });
+                    
+                    if (!isNaN(closeVal) && closeVal !== 0) {
+                        processed.push({ date: m.date, code: 'TRTN', close: closeVal, volume: volVal || 0 });
+                    }
                 });
             } else {
-                 // Fallback format standar
-                 const header = rows[0].map(h => String(h).toLowerCase());
-                 const dateIdx = header.indexOf('tanggal'); const closeIdx = header.indexOf('close'); const volIdx = header.indexOf('volume');
-                 if (dateIdx > -1 && closeIdx > -1) {
-                    for(let i=1; i<rows.length; i++) { const r = rows[i]; if(r[dateIdx]) processed.push({ date: r[dateIdx], code: 'SAHAM', close: parseFloat(r[closeIdx])||0, volume: parseFloat(r[volIdx])||0 }); }
-                 }
+                 alert("Pastikan ada baris 'Pengahasilan' dan 'Jumlah Saham' di Excel.");
+                 return;
             }
 
-            if (processed.length === 0) { alert("Format Excel tidak dikenali!"); return; }
+            if (processed.length === 0) { alert("Data kosong atau tidak terbaca!"); return; }
+            
             processed.sort((a, b) => new Date(a.date) - new Date(b.date));
             localStorage.setItem(STORAGE_KEY, JSON.stringify(processed));
             rawData = processed;
-            alert("Upload Berhasil!");
+            
+            alert("Sukses! Data diperbarui.");
             document.getElementById('dataStatus').classList.remove('hidden');
             updateDashboard(rawData);
             generateReportTable(rawData);
@@ -413,7 +426,6 @@
             document.getElementById('dashHigh').innerText = formatRupiah(Math.max(...prices));
             if(document.getElementById('dashLow')) document.getElementById('dashLow').innerText = formatRupiah(Math.min(...prices));
 
-            // Update Mobile List
             const list = document.getElementById('mobileDataList');
             list.innerHTML = '';
             data.slice().reverse().forEach(row => {
