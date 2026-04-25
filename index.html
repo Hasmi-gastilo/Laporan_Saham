@@ -1,15 +1,17 @@
 <!DOCTYPE html>
 <html lang="id">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Taretan Production - Ultimate V49</title>
-    
+    <title>Taretan Production</title>
+
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-   <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-    
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.28/jspdf.plugin.autotable.min.js"></script>
+
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700;900&display=swap" rel="stylesheet">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
 
@@ -29,21 +31,19 @@
 
         const app = initializeApp(firebaseConfig);
         const db = getDatabase(app);
-        // Pindah ke V49 agar bersih dari data error sebelumnya
-        window.dbRef = ref(db, 'taretan_final_v49'); 
-        window.setFirebase = set;
-        window.onValueFirebase = onValue;
 
-        onValue(window.dbRef, (snapshot) => {
-            const data = snapshot.val();
-            if (data) {
-                window.appData = data;
-                // Saat data masuk, langsung update dashboard
-                updateDashboard(data);
-            }
-        });
+        // Ekspor fungsi firebase ke window agar bisa diakses oleh fungsi tab multi-store
+        window.firebaseDb = db;
+        window.firebaseRef = ref;
+        window.firebaseSet = set;
+        window.firebaseOnValue = onValue;
+
+        // Jalankan inisialisasi multi-store setelah modul dimuat
+        if (typeof initMultiStore === 'function') {
+            initMultiStore();
+        }
     </script>
-    
+
     <script>
         tailwind.config = {
             darkMode: 'class',
@@ -52,482 +52,574 @@
     </script>
 
     <style>
-        body { font-family: 'Inter', sans-serif; -webkit-tap-highlight-color: transparent; }
-        
+        body {
+            font-family: 'Inter', sans-serif;
+            -webkit-tap-highlight-color: transparent;
+        }
+
         .glass {
             background: rgba(255, 255, 255, 0.95);
             backdrop-filter: blur(10px);
             border: 1px solid rgba(255, 255, 255, 0.5);
             box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
         }
+
         .dark .glass {
             background: rgba(30, 41, 59, 0.95);
             border: 1px solid rgba(255, 255, 255, 0.05);
         }
 
-        .fade-in { animation: fadeIn 0.4s ease-out; }
-        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
-        
+        .fade-in {
+            animation: fadeIn 0.4s ease-out;
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(10px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
         .mobile-bottom-nav {
-            position: fixed; bottom: 0; left: 0; right: 0;
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
             background: rgba(255, 255, 255, 0.98);
             border-top: 1px solid #e5e7eb;
-            display: flex; justify-content: space-around;
-            padding: 12px 0; z-index: 50;
+            display: flex;
+            justify-content: space-around;
+            padding: 12px 0;
+            z-index: 50;
             box-shadow: 0 -4px 6px -1px rgba(0, 0, 0, 0.05);
         }
+
         .dark .mobile-bottom-nav {
             background: rgba(17, 24, 39, 0.98);
             border-top: 1px solid #374151;
         }
 
-        .period-btn { transition: all 0.2s; }
-        .period-btn.active { background-color: #2563eb; color: white; box-shadow: 0 4px 6px -1px rgba(37, 99, 235, 0.4); }
-        .period-btn.inactive { color: #6b7280; background-color: transparent; }
-        .period-btn.inactive:hover { background-color: #f3f4f6; }
-        .dark .period-btn.inactive:hover { background-color: #374151; }
+        /* Menyembunyikan scrollbar di tab menu mobile */
+        .hide-scrollbar::-webkit-scrollbar {
+            display: none;
+        }
 
-        img[src="logo.png"], img[src="logout.png"] { text-indent: -10000px; }
+        .hide-scrollbar {
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+        }
     </style>
 </head>
-<body class="flex h-screen overflow-hidden text-gray-700 bg-gray-50 dark:bg-gray-900 dark:text-gray-200 transition-colors duration-300">
 
-    <div id="loginOverlay" class="fixed inset-0 z-[60] flex items-center justify-center bg-gray-900/95 backdrop-blur-sm p-4">
+<body
+    class="flex h-screen overflow-hidden text-gray-700 bg-gray-50 dark:bg-gray-900 dark:text-gray-200 transition-colors duration-300">
+
+    <div id="loginOverlay"
+        class="fixed inset-0 z-[60] flex items-center justify-center bg-gray-900/95 backdrop-blur-sm p-4">
         <div class="glass bg-white dark:bg-gray-800 p-8 rounded-3xl shadow-2xl w-full max-w-sm text-center fade-in">
-            <div class="w-24 h-24 mx-auto mb-6 bg-white rounded-full p-3 shadow-lg flex items-center justify-center overflow-hidden">
-                <img src="logo.png" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex'" class="w-full h-full object-contain" alt="Logo">
-                <div class="hidden w-full h-full bg-gradient-to-tr from-blue-600 to-purple-600 rounded-full items-center justify-center text-3xl text-white"><i class="fas fa-camera"></i></div>
+
+            <div
+                class="w-24 h-24 mx-auto mb-6 rounded-full shadow-lg flex items-center justify-center overflow-hidden border-4 border-blue-600 bg-white">
+                <img src="logo.png" alt="Logo" class="w-full h-full object-cover">
             </div>
+
             <h2 class="text-3xl font-black mb-1 dark:text-white tracking-tight">TARETAN</h2>
-            <p class="text-blue-500 font-bold tracking-widest text-xs mb-8">PRODUCTION</p>
+            <p class="text-blue-1500 font-bold tracking-widest text-xs mb-10">PRODUCTION</p>
+
             <div class="space-y-4">
-                <button onclick="attemptLogin('CEO')" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3.5 px-4 rounded-xl shadow-lg active:scale-95 flex items-center justify-center gap-3 transition-transform">
-                    <i class="fas fa-user-tie"></i> Login CEO
+
+                <input type="password" id="passwordInput" placeholder="Password Admin (Investor kosongi saja)"
+                    class="w-full px-4 py-3 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 text-gray-800 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none text-center text-sm shadow-inner transition-all mb-2">
+
+                <button onclick="attemptLogin('CEO')"
+                    class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3.5 px-4 rounded-xl shadow-lg active:scale-95 flex items-center justify-center gap-3 transition-transform">
+                    <i class="fas fa-user-tie"></i> Login Admin
                 </button>
-                <button onclick="attemptLogin('INVESTOR')" class="w-full bg-white border-2 border-gray-200 text-gray-700 font-bold py-3.5 px-4 rounded-xl hover:bg-gray-50 dark:bg-gray-700 dark:text-white dark:border-gray-600 flex items-center justify-center gap-3 transition-transform active:scale-95">
+                <button onclick="attemptLogin('INVESTOR')"
+                    class="w-full bg-white border-2 border-gray-200 text-gray-700 font-bold py-3.5 px-4 rounded-xl hover:bg-gray-50 dark:bg-gray-700 dark:text-white dark:border-gray-600 flex items-center justify-center gap-3 transition-transform active:scale-95">
                     <i class="fas fa-chart-line"></i> Masuk Investor
                 </button>
             </div>
-            <p class="mt-8 text-[10px] text-gray-400">V49.0 - Final Fix Parsing & Filter</p>
         </div>
     </div>
 
-    <aside class="w-72 bg-white dark:bg-gray-800 hidden md:flex flex-col border-r border-gray-200 dark:border-gray-700 z-10">
+    <aside
+        class="w-72 bg-white dark:bg-gray-800 hidden md:flex flex-col border-r border-gray-200 dark:border-gray-700 z-10">
         <div class="p-8 flex items-center gap-4">
-            <div class="w-12 h-12 shrink-0 bg-white rounded-full shadow-md flex items-center justify-center p-2 overflow-hidden border border-gray-100">
-                <img src="logo.png" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex'" class="w-full h-full object-contain" alt="Logo">
-                <div class="hidden w-full h-full rounded-full bg-blue-600 items-center justify-center text-white"><i class="fas fa-camera"></i></div>
+
+            <div class="w-12 h-12 shrink-0 rounded-full shadow-md overflow-hidden border-2 border-blue-600">
+                <img src="logo.png" alt="Logo" class="w-full h-full object-cover">
             </div>
+
             <div>
-                <h1 class="font-black text-xl tracking-tight leading-none">TARETAN</h1>
+                <h1 class="font-black text-xl tracking-tight leading-none text-gray-800 dark:text-white">TARETAN</h1>
                 <p class="text-xs text-blue-600 font-bold tracking-widest">PRODUCTION</p>
             </div>
+
         </div>
         <nav class="flex-1 px-4 space-y-2 mt-4">
-            <button onclick="switchView('dashboard')" id="nav-dashboard" class="nav-item w-full flex items-center gap-4 px-5 py-4 rounded-2xl transition hover:bg-blue-50 dark:hover:bg-gray-700 font-medium">
+            <button onclick="switchView('dashboard')" id="nav-dashboard"
+                class="nav-item bg-blue-50 text-blue-600 w-full flex items-center gap-4 px-5 py-4 rounded-2xl font-medium">
                 <i class="fas fa-th-large w-5 text-center"></i> <span>Dashboard</span>
             </button>
-            <button onclick="switchView('laporan')" id="nav-laporan" class="nav-item w-full flex items-center gap-4 px-5 py-4 rounded-2xl transition hover:bg-blue-50 dark:hover:bg-gray-700 font-medium">
-                <i class="fas fa-folder-open w-5 text-center"></i> <span>Laporan Detail</span>
-            </button>
-            <button onclick="switchView('settings')" id="nav-settings" class="nav-item w-full flex items-center gap-4 px-5 py-4 rounded-2xl transition hover:bg-blue-50 dark:hover:bg-gray-700 font-medium">
+            <button onclick="switchView('settings')" id="nav-settings"
+                class="nav-item w-full flex items-center gap-4 px-5 py-4 rounded-2xl transition hover:bg-blue-50 dark:hover:bg-gray-700 font-medium">
                 <i class="fas fa-sliders-h w-5 text-center"></i> <span>Pengaturan</span>
             </button>
         </nav>
         <div class="p-6 border-t dark:border-gray-700">
             <div class="flex items-center gap-3 bg-gray-50 dark:bg-gray-700/50 p-3 rounded-xl">
-                <div class="w-10 h-10 rounded-full bg-gradient-to-r from-blue-500 to-indigo-500 flex items-center justify-center text-white font-bold shadow">U</div>
+                <div
+                    class="w-10 h-10 rounded-full bg-gradient-to-r from-blue-500 to-indigo-500 flex items-center justify-center text-white font-bold shadow">
+                    U</div>
                 <div class="flex-1 overflow-hidden">
                     <p class="text-sm font-bold user-role-display truncate">Guest</p>
-                    <button onclick="logout()" class="text-xs text-red-500 hover:text-red-600 font-semibold flex items-center gap-1">
-                        <img src="logout.png" onerror="this.style.display='none'; this.nextElementSibling.style.display='inline'" class="w-4 h-4 object-contain" alt="X"> 
-                        <span>Keluar</span>
-                    </button>
+                    <button onclick="logout()"
+                        class="text-xs text-red-500 hover:text-red-600 font-semibold">Keluar</button>
                 </div>
             </div>
         </div>
     </aside>
 
     <main class="flex-1 flex flex-col h-screen overflow-y-auto relative pb-24 md:pb-0 bg-gray-50 dark:bg-gray-900">
-        
-        <header class="flex flex-col px-6 py-4 bg-white/80 dark:bg-gray-800/80 backdrop-blur-md sticky top-0 z-20 gap-4 shadow-sm">
+
+        <header
+            class="flex flex-col px-6 py-4 bg-white/80 dark:bg-gray-800/80 backdrop-blur-md sticky top-0 z-20 gap-4 shadow-sm">
             <div class="md:hidden flex items-center justify-between">
                 <div class="flex items-center gap-3">
-                    <div class="w-10 h-10 bg-white rounded-full shadow-md flex items-center justify-center p-1.5 overflow-hidden border border-gray-100">
-                        <img src="logo.png" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex'" class="w-full h-full object-contain" alt="Logo">
-                        <div class="hidden w-full h-full rounded-full bg-blue-600 items-center justify-center text-white"><i class="fas fa-camera"></i></div>
+                    <div class="w-10 h-10 shrink-0 rounded-full shadow-md overflow-hidden border-2 border-blue-600">
+                        <img src="logo.png" alt="Logo" class="w-full h-full object-cover">
                     </div>
-                    <span class="font-black text-lg text-gray-800 dark:text-white">TARETAN</span>
-                </div>
-                <div class="flex items-center gap-3">
-                    <button onclick="toggleDarkMode()" class="w-8 h-8 flex items-center justify-center text-gray-600 dark:text-yellow-400">
-                        <i class="fas fa-moon dark:hidden"></i><i class="fas fa-sun hidden dark:block"></i>
-                    </button>
-                    <div onclick="logout()" class="w-8 h-8 cursor-pointer active:scale-90 transition">
-                         <div class="w-8 h-8 rounded-full bg-red-50 text-red-500 flex items-center justify-center"><i class="fas fa-power-off"></i></div>
+
+                    <div class="flex flex-col">
+                        <span class="font-black text-base leading-none text-gray-800 dark:text-white">TARETAN</span>
+                        <span class="text-[10px] font-bold text-blue-600 tracking-widest">PRODUCTION</span>
                     </div>
                 </div>
+                <button onclick="toggleDarkMode()" class="w-8 h-8 text-gray-600 dark:text-yellow-400"><i
+                        class="fas fa-moon dark:hidden"></i><i class="fas fa-sun hidden dark:block"></i></button>
             </div>
 
             <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
                 <div>
-                    <h2 id="page-title" class="text-2xl font-black text-gray-800 dark:text-white">Dashboard Overview</h2>
-                    <p class="text-sm text-gray-500 dark:text-gray-400">Selamat datang, <span class="user-role-display font-bold text-blue-600">Guest</span></p>
+                    <h2 id="page-title" class="text-2xl font-black text-gray-800 dark:text-white">Sistem Dividen Saham
+                    </h2>
+                    <p class="text-sm text-gray-500 dark:text-gray-400">Selamat datang, <span
+                            class="user-role-display font-bold text-blue-600">Guest</span></p>
                 </div>
 
                 <div class="flex items-center gap-3 w-full md:w-auto">
-                    <button onclick="toggleDarkMode()" class="hidden md:flex w-10 h-10 rounded-xl bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 items-center justify-center text-gray-600 dark:text-yellow-400 shadow-sm hover:shadow-md transition">
-                        <i class="fas fa-moon dark:hidden"></i><i class="fas fa-sun hidden dark:block"></i>
-                    </button>
+                    <button onclick="toggleDarkMode()"
+                        class="hidden md:flex w-10 h-10 rounded-xl bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 items-center justify-center text-gray-600 dark:text-yellow-400 shadow-sm transition"><i
+                            class="fas fa-moon dark:hidden"></i><i class="fas fa-sun hidden dark:block"></i></button>
 
-                    <div id="uploadSection" class="ceo-only hidden w-full md:w-auto">
-                        <input type="file" id="excelInput" class="hidden"> 
-                        <label for="excelInput" class="cursor-pointer bg-blue-600 hover:bg-blue-700 text-white w-full md:w-auto px-6 py-3 rounded-xl text-sm font-bold shadow-lg shadow-blue-500/30 transition flex items-center justify-center gap-2 active:scale-95">
-                            <i class="fas fa-cloud-upload-alt"></i> <span>Upload Excel Baru</span>
+                    <div id="uploadSection" class="ceo-only hidden flex-col items-end gap-1 w-full md:w-auto">
+                        <input type="file" id="excelInput" class="hidden" accept=".xlsx, .xls, .csv">
+                        <label for="excelInput"
+                            class="cursor-pointer bg-blue-600 hover:bg-blue-700 text-white w-full md:w-auto px-6 py-3 rounded-xl text-sm font-bold shadow-lg transition flex items-center justify-center gap-2">
+                            <i class="fas fa-cloud-upload-alt"></i> <span>Upload Excel Laporan</span>
                         </label>
+                        <p class="text-[10px] text-gray-500 font-bold px-1 w-full text-right md:text-center mt-1">
+                            Target Upload: <span id="uploadTargetLabel" class="text-blue-600 font-black">TARETAN
+                                PRODUCTION</span>
+                        </p>
                     </div>
                 </div>
             </div>
         </header>
 
         <div class="p-4 md:p-8 space-y-8 max-w-7xl mx-auto w-full">
-            
+
             <section id="view-dashboard" class="view-section space-y-6 fade-in">
-                <div id="dataStatus" class="hidden bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-300 px-5 py-3 rounded-xl text-sm border border-blue-100 dark:border-blue-800 flex items-center gap-3">
-                    <i class="fas fa-wifi text-lg"></i> 
-                    <span id="statusText" class="font-medium">Menghubungkan ke Cloud...</span>
-                </div>
-                
-                <div class="grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-6">
-                    <div class="glass p-5 rounded-3xl border-l-[6px] border-blue-500 relative overflow-hidden group hover:shadow-lg transition">
-                        <div class="absolute -right-6 -top-6 text-blue-500/10 text-8xl group-hover:scale-110 transition duration-500"><i class="fas fa-wallet"></i></div>
-                        <p class="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Penghasilan</p>
-                        <p class="text-lg md:text-2xl font-black text-gray-800 dark:text-white price-value truncate" id="dashPrice">Rp 0</p>
-                    </div>
-                    <div class="glass p-5 rounded-3xl border-l-[6px] border-purple-500 relative overflow-hidden group hover:shadow-lg transition">
-                         <div class="absolute -right-6 -top-6 text-purple-500/10 text-8xl group-hover:scale-110 transition duration-500"><i class="fas fa-layer-group"></i></div>
-                        <p class="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Total Saham</p>
-                        <p class="text-lg md:text-2xl font-black text-gray-800 dark:text-white truncate" id="dashVolume">0</p>
-                    </div>
-                    <div class="glass p-5 rounded-3xl border-l-[6px] border-green-500 relative overflow-hidden group hover:shadow-lg transition">
-                        <div class="absolute -right-6 -top-6 text-green-500/10 text-8xl group-hover:scale-110 transition duration-500"><i class="fas fa-users"></i></div>
-                        <p class="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Total Investor</p>
-                        <p class="text-lg md:text-2xl font-black text-green-600 price-value truncate" id="dashInvestor">0 Org</p>
-                    </div>
-                    <div class="glass p-5 rounded-3xl border-l-[6px] border-red-500 relative overflow-hidden group hover:shadow-lg transition">
-                        <div class="absolute -right-6 -top-6 text-red-500/10 text-8xl group-hover:scale-110 transition duration-500"><i class="fas fa-chart-line"></i></div>
-                        <p class="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Kenaikan</p>
-                        <p class="text-lg md:text-2xl font-black text-red-500 price-value" id="dashGrowth">0%</p>
+
+                <!-- MULTI STORE TABS SELECTOR -->
+                <div class="flex justify-center w-full">
+                    <div
+                        class="flex gap-2 bg-gray-200/60 dark:bg-gray-800 p-1.5 rounded-2xl w-full md:w-auto overflow-x-auto hide-scrollbar shadow-inner">
+                        <button onclick="changeStore('kamera')" id="tab-kamera"
+                            class="store-tab flex-1 min-w-[110px] md:w-36 py-2.5 px-4 rounded-xl text-sm font-bold transition-all whitespace-nowrap"><i
+                                class="fas fa-camera mr-1"></i> KAMERA</button>
+                        <button onclick="changeStore('vapor')" id="tab-vapor"
+                            class="store-tab flex-1 min-w-[110px] md:w-36 py-2.5 px-4 rounded-xl text-sm font-bold transition-all whitespace-nowrap"><i
+                                class="fas fa-wind mr-1"></i> VAPE</button>
+                        <button onclick="changeStore('vaporte')" id="tab-vaporte"
+                            class="store-tab flex-1 min-w-[110px] md:w-36 py-2.5 px-4 rounded-xl text-sm font-bold transition-all whitespace-nowrap"><i
+                                class="fas fa-smoking mr-1"></i> VAPORTE</button>
                     </div>
                 </div>
 
-                <div class="glass p-5 md:p-8 rounded-3xl bg-white dark:bg-gray-800 shadow-sm">
-                    <div class="flex flex-col md:flex-row justify-between items-center mb-4 gap-4">
-                        <h3 class="font-bold text-lg dark:text-white">Statistik Keuangan</h3>
-                        <div class="flex bg-gray-100 dark:bg-gray-700 p-1 rounded-lg">
-                            <button onclick="setPeriod('1B')" class="period-btn active px-3 py-1 rounded-md text-xs font-bold">1B</button>
-                            <button onclick="setPeriod('3B')" class="period-btn inactive px-3 py-1 rounded-md text-xs font-bold">3B</button>
-                            <button onclick="setPeriod('6B')" class="period-btn inactive px-3 py-1 rounded-md text-xs font-bold">6B</button>
-                            <button onclick="setPeriod('1T')" class="period-btn inactive px-3 py-1 rounded-md text-xs font-bold">1T</button>
+                <div
+                    class="bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-300 px-5 py-3 rounded-xl text-sm border border-blue-100 dark:border-blue-800 flex items-center gap-3">
+                    <i class="fas fa-wifi text-lg"></i>
+                    <span id="statusText" class="font-medium">Memuat Data dari Cloud...</span>
+                </div>
+
+                <div class="grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-6">
+                    <div class="glass p-5 rounded-3xl border-l-[6px] border-blue-500 relative overflow-hidden group">
+                        <div class="absolute -right-6 -top-6 text-blue-500/10 text-8xl"><i class="fas fa-wallet"></i>
                         </div>
+                        <p class="text-xs font-bold text-gray-400 uppercase mb-2">Total Dividen Dibagikan</p>
+                        <p class="text-lg md:text-2xl font-black text-gray-800 dark:text-white" id="dashPrice">Rp 0</p>
                     </div>
-                    <div class="h-64 w-full relative">
-                        <canvas id="financeChart"></canvas>
+                    <div class="glass p-5 rounded-3xl border-l-[6px] border-purple-500 relative overflow-hidden group">
+                        <div class="absolute -right-6 -top-6 text-purple-500/10 text-8xl"><i
+                                class="fas fa-layer-group"></i></div>
+                        <p class="text-xs font-bold text-gray-400 uppercase mb-2">Total Modal Terkumpul</p>
+                        <p class="text-lg md:text-2xl font-black text-gray-800 dark:text-white" id="dashVolume">Rp 0</p>
+                    </div>
+                    <div class="glass p-5 rounded-3xl border-l-[6px] border-green-500 relative overflow-hidden group">
+                        <div class="absolute -right-6 -top-6 text-green-500/10 text-8xl"><i class="fas fa-users"></i>
+                        </div>
+                        <p class="text-xs font-bold text-gray-400 uppercase mb-2">Total Investor</p>
+                        <p class="text-lg md:text-2xl font-black text-green-600" id="dashInvestor">0 Orang</p>
+                    </div>
+                    <div class="glass p-5 rounded-3xl border-l-[6px] border-red-500 relative overflow-hidden group">
+                        <div class="absolute -right-6 -top-6 text-red-500/10 text-8xl"><i
+                                class="fas fa-calendar-check"></i></div>
+                        <p class="text-xs font-bold text-gray-400 uppercase mb-2">Mode Tampilan Data</p>
+                        <p class="text-lg md:text-xl font-black text-blue-500 uppercase" id="currentPeriodLabel">TAHUNAN
+                        </p>
                     </div>
                 </div>
-                
-                <div class="glass p-5 md:p-6 rounded-3xl bg-white dark:bg-gray-800">
-                    <div class="flex flex-col md:flex-row justify-between items-center mb-5 gap-3">
-                        <h3 class="font-bold text-lg dark:text-white w-full md:w-auto">Rincian Investor</h3>
-                        
-                        <div class="flex gap-2 w-full md:w-auto">
-                            <select id="monthSelector" onchange="applyMonthFilter()" class="bg-blue-50 border border-blue-200 text-blue-800 text-sm rounded-xl px-3 py-2 font-bold focus:ring-blue-500 focus:border-blue-500 block w-full dark:bg-gray-700 dark:border-gray-600 dark:text-white">
-                                <option value="total">Total Tahunan</option>
-                                <option value="Januari">Januari</option>
-                                <option value="Februari">Februari</option>
-                                <option value="Maret">Maret</option>
-                                <option value="April">April</option>
-                                <option value="Mei">Mei</option>
-                                <option value="Juni">Juni</option>
-                                <option value="Juli">Juli</option>
-                                <option value="Agustus">Agustus</option>
-                                <option value="September">September</option>
-                                <option value="Oktober">Oktober</option>
-                                <option value="November">November</option>
-                                <option value="Desember">Desember</option>
-                            </select>
-                            
-                            <input type="text" id="searchMobile" onkeyup="filterMobileList()" placeholder="Cari Nama..." class="bg-gray-100 dark:bg-gray-700 px-3 py-2 rounded-xl text-xs outline-none w-full md:w-48">
+
+                <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+
+                    <div
+                        class="lg:col-span-1 glass p-5 md:p-6 rounded-3xl bg-white dark:bg-gray-800 shadow-sm flex flex-col">
+                        <h3 class="font-bold text-lg dark:text-white mb-4">Grafik Keuangan</h3>
+                        <div class="flex-1 w-full relative min-h-[300px]">
+                            <canvas id="financeChart"></canvas>
                         </div>
                     </div>
-                    <div id="mobileDataList" class="space-y-4">
-                        <div class="text-center text-gray-400 text-sm py-8">Memuat Data...</div>
+
+                    <div class="lg:col-span-2 glass p-5 md:p-6 rounded-3xl bg-white dark:bg-gray-800 flex flex-col">
+
+                        <div
+                            class="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4 border-b dark:border-gray-700 pb-4">
+                            <h3 class="font-bold text-lg dark:text-white flex items-center gap-2">
+                                <i class="fas fa-list text-blue-500"></i> Rincian Investor
+                            </h3>
+
+                            <div class="flex flex-col sm:flex-row gap-3 w-full md:w-auto">
+                                <div class="relative w-full sm:w-48">
+                                    <i class="fas fa-calendar-alt absolute left-3 top-2.5 text-blue-500 text-sm"></i>
+                                    <select id="monthSelector" onchange="renderInvestorList()"
+                                        class="pl-9 pr-4 py-2 w-full rounded-xl text-sm font-bold bg-blue-50 dark:bg-gray-700 text-blue-700 dark:text-white border border-blue-100 dark:border-gray-600 outline-none appearance-none cursor-pointer">
+                                        <option value="total">Total Tahunan</option>
+                                        <option disabled>──────────</option>
+                                        <option value="0">Januari</option>
+                                        <option value="1">Februari</option>
+                                        <option value="2">Maret</option>
+                                        <option value="3">April</option>
+                                        <option value="4">Mei</option>
+                                        <option value="5">Juni</option>
+                                        <option value="6">Juli</option>
+                                        <option value="7">Agustus</option>
+                                        <option value="8">September</option>
+                                        <option value="9">Oktober</option>
+                                        <option value="10">November</option>
+                                        <option value="11">Desember</option>
+                                    </select>
+                                </div>
+
+                                <button onclick="downloadPDF()"
+                                    class="bg-gray-800 text-white hover:bg-green-600 px-4 py-2 rounded-xl text-sm font-bold flex items-center justify-center gap-2 transition">
+                                    <i class="fas fa-file-pdf"></i> Export
+                                </button>
+                            </div>
+                        </div>
+
+                        <div class="overflow-x-auto hidden md:block">
+                            <table class="w-full text-left text-sm text-gray-500 dark:text-gray-400">
+                                <thead class="text-xs text-gray-400 uppercase border-b dark:border-gray-700">
+                                    <tr>
+                                        <th class="py-3 px-2">Nama Investor</th>
+                                        <th class="py-3 px-2 text-right">Persen Pembagian</th>
+                                        <th class="py-3 px-2 text-right">Modal Saham</th>
+                                        <th class="py-3 px-2 text-right text-blue-500">Hasil Dividen</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="reportTableBody">
+                                    <tr>
+                                        <td colspan="4" class="text-center py-6">Memuat Data...</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <div id="mobileDataList" class="space-y-3 md:hidden">
+                            <div class="text-center text-gray-400 text-sm py-8">Memuat Data...</div>
+                        </div>
+
                     </div>
                 </div>
             </section>
 
             <section id="view-settings" class="view-section hidden space-y-6 fade-in">
                 <div class="glass p-6 md:p-8 rounded-3xl bg-white dark:bg-gray-800">
-                    <h3 class="font-bold text-2xl mb-6 dark:text-white flex items-center gap-3"><i class="fas fa-cog text-gray-400"></i> Pengaturan</h3>
+                    <h3 class="font-bold text-2xl mb-6 dark:text-white flex items-center gap-3"><i
+                            class="fas fa-cog text-gray-400"></i> Pengaturan</h3>
                     <div class="ceo-only hidden space-y-5">
-                        <div class="bg-red-50 dark:bg-red-900/20 border border-red-100 dark:border-red-800 p-5 rounded-2xl">
-                             <button onclick="clearCloudData()" class="w-full bg-red-600 text-white p-4 rounded-xl text-sm font-bold shadow hover:bg-red-700 transition flex items-center justify-center gap-2"><i class="fas fa-trash-alt"></i> Hapus Database (Reset)</button>
+                        <div
+                            class="bg-red-50 dark:bg-red-900/20 border border-red-100 dark:border-red-800 p-5 rounded-2xl">
+                            <button onclick="clearCloudData()"
+                                class="w-full bg-red-600 text-white p-4 rounded-xl text-sm font-bold shadow hover:bg-red-700 transition flex items-center justify-center gap-2"><i
+                                    class="fas fa-trash-alt"></i> Hapus Database (Reset Toko Ini)</button>
                         </div>
                     </div>
-                    <div class="investor-only hidden text-center py-10"><p class="text-gray-400">Mode Investor (View Only).</p></div>
+                    <div class="investor-only hidden text-center py-10">
+                        <p class="text-gray-400">Anda dalam mode Investor. Pengaturan dikunci.</p>
+                    </div>
                 </div>
             </section>
-            
-            <section id="view-laporan" class="view-section hidden space-y-6 fade-in">
-                 <div class="glass p-6 md:p-8 rounded-3xl bg-white dark:bg-gray-800">
-                    <div class="flex flex-col md:flex-row justify-between items-center mb-6">
-                        <h3 class="font-bold text-2xl dark:text-white mb-2 md:mb-0">Laporan Keuangan</h3>
-                        <div class="text-sm font-bold text-blue-600 bg-blue-50 px-4 py-2 rounded-lg border border-blue-100 dark:bg-gray-700 dark:text-blue-400 dark:border-gray-600">
-                            Periode: <span id="reportPeriodLabel">Total Tahunan</span>
-                        </div>
-                    </div>
 
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
-                        <button onclick="downloadExcel()" class="bg-green-600 hover:bg-green-700 text-white p-4 rounded-2xl font-bold shadow-lg flex items-center justify-center gap-3"><i class="fas fa-file-excel text-xl"></i> Download Excel</button>
-                        <button onclick="downloadPDF()" class="bg-red-600 hover:bg-red-700 text-white p-4 rounded-2xl font-bold shadow-lg flex items-center justify-center gap-3"><i class="fas fa-file-pdf text-xl"></i> Download PDF</button>
-                    </div>
-                    <div class="overflow-x-auto rounded-xl border border-gray-200 dark:border-gray-700">
-                        <table class="w-full text-sm text-left text-gray-500 dark:text-gray-400">
-                            <thead class="text-xs text-gray-700 uppercase bg-gray-50 dark:bg-gray-700 dark:text-gray-200">
-                                <tr>
-                                    <th class="px-6 py-3">Nama Investor</th>
-                                    <th class="px-6 py-3">Persen Saham</th> <th class="px-6 py-3">Jumlah Saham</th>
-                                    <th class="px-6 py-3 text-right">Hasil (Rp)</th>
-                                </tr>
-                            </thead>
-                            <tbody id="reportTableBody"></tbody>
-                        </table>
-                    </div>
-                </div>
-            </section>
         </div>
     </main>
 
     <nav class="mobile-bottom-nav md:hidden">
-        <button onclick="switchView('dashboard')" id="mob-nav-dashboard" class="flex flex-col items-center justify-center w-20 py-2 rounded-2xl text-gray-400 transition-all duration-300">
+        <button onclick="switchView('dashboard')" id="mob-nav-dashboard"
+            class="flex flex-col items-center justify-center w-20 py-2 rounded-2xl text-blue-600 bg-blue-50">
             <i class="fas fa-th-large text-xl mb-1"></i><span class="text-[10px] font-bold">Home</span>
         </button>
-        <button onclick="switchView('laporan')" id="mob-nav-laporan" class="flex flex-col items-center justify-center w-20 py-2 rounded-2xl text-gray-400 transition-all duration-300">
-            <i class="fas fa-file-alt text-xl mb-1"></i><span class="text-[10px] font-bold">Laporan</span>
-        </button>
-        <button onclick="switchView('settings')" id="mob-nav-settings" class="flex flex-col items-center justify-center w-20 py-2 rounded-2xl text-gray-400 transition-all duration-300">
+        <button onclick="switchView('settings')" id="mob-nav-settings"
+            class="flex flex-col items-center justify-center w-20 py-2 rounded-2xl text-gray-400">
             <i class="fas fa-sliders-h text-xl mb-1"></i><span class="text-[10px] font-bold">Setting</span>
         </button>
     </nav>
 
     <script>
-        let rawData = {}; 
         let chartInstance = null;
-        let currentPeriod = '1B';
-        const PASSWORD_CEO = "admin123";
-        const monthsList = ['Januari','Februari','Maret','April','Mei','Juni','Juli','Agustus','September','Oktober','November','Desember'];
+        const PASSWORD_CEO = "12345";
+
+        // STATE MULTI-STORE
+        let currentStoreId = 'kamera';
+        let unsubscribeDb = null;
+        const storeNames = {
+            'kamera': 'TARETAN KAMERA',
+            'vapor': 'TARETAN VAPOR',
+            'vaporte': 'VAPORTE'
+        };
 
         const formatRupiah = (num) => new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(num);
-        const formatRibuan = (num) => new Intl.NumberFormat('id-ID').format(num); 
 
-        window.onload = function() {
+        const monthNames = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'];
+
+        window.onload = function () {
             if (localStorage.getItem('theme') === 'dark' || (!('theme' in localStorage) && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
                 document.documentElement.classList.add('dark');
             }
-            switchView('dashboard');
         };
 
+        // FUNGSI INIT MULTI STORE
+        function initMultiStore() {
+            changeStore('kamera');
+        }
+
+        // FUNGSI GANTI TOKO (TAB)
+        function changeStore(storeId) {
+            currentStoreId = storeId;
+
+            // 1. Update Tampilan Tab
+            document.querySelectorAll('.store-tab').forEach(btn => {
+                btn.classList.remove('bg-white', 'shadow', 'text-blue-600', 'dark:bg-gray-700', 'dark:text-white');
+                btn.classList.add('text-gray-500', 'dark:text-gray-400');
+            });
+            const activeTab = document.getElementById('tab-' + storeId);
+            if (activeTab) {
+                activeTab.classList.remove('text-gray-500', 'dark:text-gray-400');
+                activeTab.classList.add('bg-white', 'shadow', 'text-blue-600', 'dark:bg-gray-700', 'dark:text-white');
+            }
+
+            // 2. Update Teks Target Upload & Judul Perusahaan
+            document.getElementById('uploadTargetLabel').innerText = storeNames[storeId];
+            document.querySelectorAll('.company-name-main').forEach(el => el.innerText = storeNames[storeId].split(' ')[0]);
+            document.querySelectorAll('.company-name-sub').forEach(el => el.innerText = storeNames[storeId].split(' ').slice(1).join(' ') || "PRODUCTION");
+
+            // 3. Matikan koneksi DB sebelumnya (jika ada)
+            if (unsubscribeDb) unsubscribeDb();
+
+            // 4. Reset layar sementara menunggu data baru
+            window.appData = null;
+            updateDashboard(null);
+            document.getElementById('statusText').innerText = "Memuat data " + storeNames[storeId] + "...";
+
+            // 5. Sambungkan ke Database khusus Toko yang dipilih
+            const dbPath = 'taretan_multistore_v1/' + storeId;
+            window.dbRef = window.firebaseRef(window.firebaseDb, dbPath);
+
+            unsubscribeDb = window.firebaseOnValue(window.dbRef, (snapshot) => {
+                const data = snapshot.val();
+                window.appData = data;
+                updateDashboard(data);
+            });
+        }
+
         function updateDashboard(data) {
-            // 1. PENGAMAN UNTUK STATUS: Cek dulu elemennya ada atau nggak
-            const statusElement = document.getElementById('dataStatus');
-            if (statusElement) {
-                statusElement.classList.remove('hidden');
+            if (!data) {
+                document.getElementById('statusText').innerText = `Database ${storeNames[currentStoreId]} Kosong. Silakan Upload Excel.`;
+                document.getElementById('dashPrice').innerText = "Rp 0";
+                document.getElementById('dashVolume').innerText = "Rp 0";
+                document.getElementById('dashInvestor').innerText = "0 Orang";
+                document.getElementById('reportTableBody').innerHTML = `<tr><td colspan="4" class="text-center py-6 text-gray-500">Belum ada data untuk toko ini.</td></tr>`;
+                document.getElementById('mobileDataList').innerHTML = `<div class="text-center text-gray-400 text-sm py-8">Belum ada data untuk toko ini.</div>`;
+                if (chartInstance) chartInstance.destroy();
+                return;
             }
 
             const summary = data.summary || {};
-            const investors = data.investors ? Object.values(data.investors) : [];
             const history = data.monthlyHistory || {};
 
-            // 2. PENGAMAN UNTUK TEKS: Cek juga biar nggak error
-            const statusTextElement = document.getElementById('statusText');
-            if (statusTextElement) {
-                statusTextElement.innerText = `Data Live: ${summary.lastUpdate || '-'}`;
-            }
-            
-            // 1. Hitung Total Saham Global (Untuk perhitungan Persen)
-            const totalSharesGlobal = investors.reduce((sum, inv) => sum + (inv.shares || 0), 0);
-            
-            // 2. Simpan Total Saham ke window object biar bisa diakses fungsi lain
-            window.totalSharesGlobal = totalSharesGlobal;
+            document.getElementById('statusText').innerText = `Sinkronisasi Terakhir (${storeNames[currentStoreId]}): ${summary.lastUpdate || '-'}`;
 
-            // Pengaman untuk Volume
-            const elVolume = document.getElementById('dashVolume');
-            if (elVolume) {
-                elVolume.innerText = formatRibuan(totalSharesGlobal);
-            }
-
-            // Pengaman untuk Total Investor
-            const elInvestor = document.getElementById('dashInvestor');
-            if (elInvestor) {
-                elInvestor.innerText = investors.length + " Org";
-            }
-
-            // 3. Render Grafik & List
-            applyMonthFilter(); // Render List & Card Harga
-            try { renderChartAndGrowth(history, currentPeriod); } catch(e) { console.log(e); }
+            try { renderChart(history); } catch (e) { console.log(e); }
+            renderInvestorList();
         }
-        // --- CORE FUNCTION: APPLY FILTER (LIST & TABLE) ---
-function applyMonthFilter() {
-            // 1. PENGAMAN KOTAK PILIHAN BULAN
-            const monthSelectorEl = document.getElementById('monthSelector');
-            // Kalau kotaknya ada, ambil isinya. Kalau nggak ada, otomatis pilih 'total'
-            const selectedMonth = monthSelectorEl ? monthSelectorEl.value : 'total';
-            
-            // 2. PENGAMAN LABEL PERIODE
-            const reportPeriodEl = document.getElementById('reportPeriodLabel');
-            if (reportPeriodEl) {
-                reportPeriodEl.innerText = selectedMonth === 'total' ? 'Total Tahunan' : selectedMonth;
-            }
-            
-            const investors = window.appData?.investors ? Object.values(window.appData.investors) : [];
-            
-            let filteredIncome = 0;
-            const displayList = investors.map(inv => {
-                let showProfit = 0;
-                let ownershipPct = 0; 
 
-                if(selectedMonth === 'total') {
-                    showProfit = inv.profit; 
-                    if(window.totalSharesGlobal > 0) {
-                        ownershipPct = (inv.shares / window.totalSharesGlobal) * 100;
-                    }
+        function renderInvestorList() {
+            if (!window.appData || !window.appData.investors) return;
+
+            const selectedMonth = document.getElementById('monthSelector').value;
+            const investors = Object.values(window.appData.investors);
+
+            const list = document.getElementById('mobileDataList');
+            const tbody = document.getElementById('reportTableBody');
+            const periodLabel = document.getElementById('currentPeriodLabel');
+
+            let totalDisplayedIncome = 0;
+            let totalModalKeseluruhan = 0;
+
+            investors.forEach(inv => {
+                totalModalKeseluruhan += inv.shares;
+                if (selectedMonth === 'total') {
+                    totalDisplayedIncome += inv.totalProfit;
                 } else {
-                    // Ambil Rupiah per bulan
-                    showProfit = inv.monthlyBreakdown ? (inv.monthlyBreakdown[selectedMonth] || 0) : 0;
-                    
-                    // Ambil Persen per bulan dari Excel
-                    let monthPct = inv.monthlyBreakdown ? inv.monthlyBreakdown[selectedMonth + '_pct'] : 0;
-                    
-                    // Cek apakah Excel punya persenan untuk bulan itu
-                    if (monthPct !== undefined && monthPct !== null && monthPct !== 0) {
-                        ownershipPct = parseFloat(monthPct);
-                    } else {
-                        // Jaga-jaga kalau persen di excel kosong, baru hitung Modal Dasar
-                        if(window.totalSharesGlobal > 0) {
-                            ownershipPct = (inv.shares / window.totalSharesGlobal) * 100;
-                        }
-                    }
+                    const mIdx = parseInt(selectedMonth);
+                    totalDisplayedIncome += (inv.monthlyData && inv.monthlyData[mIdx]) ? inv.monthlyData[mIdx] : 0;
                 }
-                
-                filteredIncome += showProfit;
-                return { ...inv, displayProfit: showProfit, ownershipPct: ownershipPct };
             });
 
-            const dashPriceEl = document.getElementById('dashPrice');
-            if (dashPriceEl) {
-                dashPriceEl.innerText = formatRupiah(filteredIncome);
+            investors.sort((a, b) => b.shares - a.shares);
+
+            let listHTML = '';
+            let tbodyHTML = '';
+
+            investors.forEach(inv => {
+                let amount = 0;
+                let pctValue = 0;
+
+                if (selectedMonth === 'total') {
+                    amount = inv.totalProfit;
+                    pctValue = totalModalKeseluruhan > 0 ? (inv.shares / totalModalKeseluruhan) * 100 : 0;
+                } else {
+                    const mIdx = parseInt(selectedMonth);
+                    amount = (inv.monthlyData && inv.monthlyData[mIdx]) ? inv.monthlyData[mIdx] : 0;
+
+                    // V67 STRICT: MURNI COPY-PASTE DARI EXCEL
+                    pctValue = (inv.monthlyPercent && inv.monthlyPercent[mIdx] !== undefined) ? inv.monthlyPercent[mIdx] : 0;
+                }
+
+                // SINKRONISASI TANDA MINUS: Jika uang minus, persen harus minus
+                if (amount < 0 && pctValue > 0) pctValue = -pctValue;
+
+                // LOGIKA WARNA MERAH
+                let isMinus = amount < 0 || pctValue < 0;
+                let textColorAmount = isMinus ? "text-red-500" : "text-green-600";
+                let textColorPercent = isMinus ? "text-red-500" : "text-blue-600";
+
+                // FORMAT PERSENTASE RAPI (Misal -25%)
+                let pctText = Math.abs(pctValue).toFixed(2);
+                if (pctText.endsWith(".00")) pctText = pctText.slice(0, -3);
+                else if (pctText.endsWith("0")) pctText = pctText.slice(0, -1);
+
+                // Tambahkan tanda minus di depan jika isMinus true
+                pctText = (isMinus && Math.abs(pctValue) > 0 ? "-" : "") + pctText + "%";
+
+                listHTML += `
+<div class="bg-white dark:bg-gray-800 p-4 rounded-2xl border border-gray-100 dark:border-gray-700 shadow-sm flex items-center justify-between gap-3">
+    
+    <div class="flex items-center gap-3 min-w-0 flex-1">
+        <div class="w-9 h-9 rounded-full bg-blue-50 dark:bg-blue-900/30 flex-shrink-0 flex items-center justify-center text-blue-600">
+            <i class="fas fa-user-tie text-sm"></i>
+        </div>
+        <div class="min-w-0">
+            <p class="font-bold text-gray-800 dark:text-white truncate uppercase text-xs md:text-sm">
+                ${inv.name.toLowerCase()}
+            </p>
+            <div class="flex items-center gap-1.5 mt-0.5">
+                <span class="text-[10px] font-bold px-1.5 py-0.5 rounded-md ${amount < 0 ? 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-400' : 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-400'}">
+                    ${pctText}
+                </span>
+                <span class="text-[10px] text-gray-400 truncate">
+                    Modal: ${formatRupiah(inv.shares)}
+                </span>
+            </div>
+        </div>
+    </div>
+
+    <div class="text-right flex-shrink-0">
+        <p class="font-black ${textColorAmount} text-xs md:text-sm whitespace-nowrap">
+            ${formatRupiah(amount)}
+        </p>
+    </div>
+
+</div>`;
+
+                tbodyHTML += `
+                <tr class="border-b dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/30 transition">
+                    <td class="py-4 px-2 font-bold text-gray-800 dark:text-white capitalize">${inv.name.toLowerCase()}</td>
+                    <td class="py-4 px-2 text-right ${textColorPercent} font-bold bg-blue-50/50 dark:bg-blue-900/10">${pctText}</td>
+                    <td class="py-4 px-2 text-right font-mono text-sm text-gray-600 dark:text-gray-400">${formatRupiah(inv.shares)}</td>
+                    <td class="py-4 px-2 text-right font-black ${textColorAmount}">${formatRupiah(amount)}</td>
+                </tr>`;
+            });
+
+            list.innerHTML = listHTML;
+            tbody.innerHTML = tbodyHTML;
+
+            if (selectedMonth !== 'total' && totalDisplayedIncome === 0 && listHTML === '') {
+                tbody.innerHTML += `<tr><td colspan="4" class="text-center py-4 bg-yellow-50 dark:bg-yellow-900/20 text-yellow-600 dark:text-yellow-400 font-bold text-xs"><i class="fas fa-info-circle"></i> Tidak ada pembagian dividen di bulan ini (Rp 0).</td></tr>`;
             }
-            
-            renderLists(displayList, selectedMonth);
+
+            document.getElementById('dashPrice').innerText = formatRupiah(totalDisplayedIncome);
+            document.getElementById('dashVolume').innerText = formatRupiah(totalModalKeseluruhan);
+            document.getElementById('dashInvestor').innerText = investors.length + " Orang";
+
+            if (selectedMonth === 'total') {
+                periodLabel.innerText = "TAHUNAN";
+            } else {
+                periodLabel.innerText = monthNames[parseInt(selectedMonth)].toUpperCase();
+            }
         }
 
-        function renderLists(investors, filterType) {
-            investors.sort((a,b) => b.displayProfit - a.displayProfit);
-            
-            // Pengaman untuk List Mobile
-            const list = document.getElementById('mobileDataList'); 
-            if (list) {
-                list.innerHTML = '';
-            }
-            
-            // Pengaman untuk Tabel Desktop
-            const tbody = document.getElementById('reportTableBody'); 
-            if (tbody) {
-                tbody.innerHTML = '';
-            }
-            
-            // ... (biarkan sisa kode di bawahnya tetap sama) ...
-
-    investors.forEach(inv => {
-        // 🔴 DETEKTOR MINUS: Cek apakah uang atau persenannya minus
-        const isMinus = inv.displayProfit < 0 || inv.ownershipPct < 0;
-        
-        // 🎨 OTOMATIS GANTI WARNA
-        const moneyColorClass = isMinus ? 'text-red-600' : 'text-green-600'; // Uang: Merah / Hijau
-        const pctBgMobile = isMinus ? 'bg-red-100' : 'bg-blue-100';          // Background Persen: Merah / Biru
-        const pctTextMobile = isMinus ? 'text-red-700' : 'text-blue-700';    // Teks Persen: Merah / Biru
-        const pctTextDesktop = isMinus ? 'text-red-600' : 'text-blue-600';   // Persen di Tabel Desktop
-
-        // Tampilkan di Mobile List
-        list.innerHTML += `
-        <div class="search-item flex justify-between items-center bg-gray-50 dark:bg-gray-700/30 p-3 rounded-xl border border-gray-100 dark:border-gray-700">
-            <div class="flex items-center gap-3">
-                <div class="w-8 h-8 rounded-full bg-blue-100 dark:bg-blue-900/50 flex items-center justify-center text-blue-600 text-xs font-bold"><i class="fas fa-user"></i></div>
-                <div>
-                    <div class="flex items-center gap-2">
-                        <p class="font-bold text-sm text-gray-800 dark:text-gray-200 capitalize name-text">${inv.name.toLowerCase()}</p>
-                        <span class="text-[10px] ${pctBgMobile} ${pctTextMobile} px-1 rounded font-bold">${inv.ownershipPct.toFixed(1)}%</span>
-                    </div>
-                    <p class="text-[10px] text-gray-500">Saham: ${formatRibuan(inv.shares)}</p>
-                </div>
-            </div>
-            <div class="text-right">
-                <p class="font-bold ${moneyColorClass} text-sm">${formatRupiah(inv.displayProfit)}</p>
-                <p class="text-[10px] text-gray-400">${filterType === 'total' ? 'Total' : filterType}</p>
-            </div>
-        </div>`;
-        
-        // Tampilkan di Tabel (Laporan Detail)
-        tbody.innerHTML += `
-        <tr class="bg-white border-b dark:bg-gray-800 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600">
-            <td class="px-6 py-4 font-medium text-gray-900 dark:text-white whitespace-nowrap capitalize">${inv.name.toLowerCase()}</td>
-            <td class="px-6 py-4 ${pctTextDesktop} font-bold">${inv.ownershipPct.toFixed(1)}%</td>
-            <td class="px-6 py-4">${formatRibuan(inv.shares)}</td>
-            <td class="px-6 py-4 text-right font-bold ${moneyColorClass}">${formatRupiah(inv.displayProfit)}</td>
-        </tr>`;
-    });
-}
-
-        // --- CHART DENGAN GRID & SCALING ---
-        function renderChartAndGrowth(history, period) {
-            const months = ['Januari','Februari','Maret','April','Mei','Juni','Juli','Agustus','September','Oktober','November','Desember'];
+        function renderChart(history) {
             let labels = [];
             let values = [];
 
-            months.forEach(m => {
-                // Pastikan nilai ada, walaupun 0 tetap dimasukkan agar sumbu X lengkap
-                let val = (history[m] && history[m].income) ? history[m].income : 0;
-                labels.push(m.substr(0,3));
-                values.push(val);
+            monthNames.forEach(m => {
+                let inc = (history[m] && history[m].income) ? history[m].income : 0;
+                labels.push(m.substr(0, 3));
+                values.push(inc);
             });
 
-            // Logic tombol 1B, 3B, 6B, 1T
-            let sliceLabels = [], sliceValues = [];
-            if(period === '1B') { sliceLabels = labels.slice(-1); sliceValues = values.slice(-1); }
-            else if(period === '3B') { sliceLabels = labels.slice(-3); sliceValues = values.slice(-3); }
-            else if(period === '6B') { sliceLabels = labels.slice(-6); sliceValues = values.slice(-6); }
-            else { sliceLabels = labels; sliceValues = values; } // 1T (Default)
-
             const ctx = document.getElementById('financeChart').getContext('2d');
-            if(chartInstance) chartInstance.destroy();
+            if (chartInstance) chartInstance.destroy();
 
             const gridColor = document.documentElement.classList.contains('dark') ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.05)';
 
             chartInstance = new Chart(ctx, {
-                type: 'line',
+                type: 'bar',
                 data: {
-                    labels: sliceLabels,
+                    labels: labels,
                     datasets: [{
-                        label: 'Penghasilan',
-                        data: sliceValues,
-                        borderColor: '#2563eb',
-                        backgroundColor: 'rgba(37, 99, 235, 0.15)',
-                        borderWidth: 3,
-                        pointBackgroundColor: '#fff',
-                        pointBorderColor: '#2563eb',
-                        pointRadius: 4,
-                        tension: 0.4,
-                        fill: true
+                        label: 'Total Dividen Bulan',
+                        data: values,
+                        backgroundColor: '#2563eb',
+                        borderRadius: 6
                     }]
                 },
                 options: {
@@ -535,315 +627,336 @@ function applyMonthFilter() {
                     maintainAspectRatio: false,
                     plugins: { legend: { display: false } },
                     scales: {
-                        y: { display: true, beginAtZero: true, grid: { display: true, color: gridColor, borderDash: [5, 5] }, ticks: { callback: function(value) { return value / 1000 + 'k'; }, color: '#94a3b8', font: { size: 10 } } },
-                        x: { grid: { display: true, color: gridColor, borderDash: [5, 5] }, ticks: { color: '#94a3b8', font: { size: 10 } } }
+                        y: { display: true, grid: { color: gridColor }, ticks: { callback: function (value) { return value / 1000 + 'k'; }, color: '#94a3b8' } },
+                        x: { grid: { display: false }, ticks: { color: '#94a3b8' } }
                     }
                 }
             });
-
-            // Kalkulasi Kenaikan (Growth)
-            let growth = 0;
-            // Bandingkan bulan terakhir yang ada datanya dengan bulan sebelumnya
-            // Cari index bulan terakhir yang > 0
-            let lastIndex = values.length - 1;
-            while(lastIndex >= 0 && values[lastIndex] === 0) { lastIndex--; }
-            
-            if(lastIndex > 0) {
-                const currentVal = values[lastIndex];
-                const prevVal = values[lastIndex - 1];
-                if(prevVal > 0) growth = ((currentVal - prevVal) / prevVal) * 100;
-            }
-
-            const elGrowth = document.getElementById('dashGrowth');
-            elGrowth.innerText = growth.toFixed(1) + "%";
-            elGrowth.className = `text-lg md:text-2xl font-black price-value ${growth >= 0 ? 'text-green-500' : 'text-red-500'}`;
         }
 
-        // --- PARSING EXCEL V49 (SUPER DETAILED FIX) ---
-       // --- LOGIKA UPLOAD V-FINAL (KUNCI MATI / HARDCODED) ---
-        // JAMINAN 100%: Membaca posisi kolom persis seperti Foto Excel
-      document.getElementById('excelInput').addEventListener('change', async (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
+        // FUNGSI PINTAR MEMBACA ANGKA
+        const parseExcelNumber = (raw) => {
+            if (raw === undefined || raw === null || raw === "") return 0;
+            let str = String(raw).trim();
+            let isNeg = str.includes('-') || (str.includes('(') && str.includes(')'));
+            let num = parseFloat(str.replace(/[^0-9.]/g, "")) || 0;
+            return isNeg ? -num : num;
+        };
 
-    const cleanMoney = (val) => {
-        if (!val) return 0;
-        let str = String(val);
-        if (typeof val === 'number') return val;
-        str = str.replace(/\./g, '');       
-        str = str.replace(/[^0-9,-]/g, ''); // Tambah deteksi tanda minus (-)
-        str = str.replace(',', '.');        
-        return parseFloat(str) || 0;
-    };
+        // FUNGSI PINTAR KHUSUS MEMBACA PERSENTASE
+        const parseExcelPercent = (raw) => {
+            if (raw === undefined || raw === null || raw === "") return 0;
+            let str = String(raw).trim();
+            let isNeg = str.includes('-') || (str.includes('(') && str.includes(')'));
 
-    const cleanPercent = (val) => {
-        if (!val && val !== 0) return 0;
-        let str = String(val);
-        // PERBAIKAN DI SINI: Deteksi angka dari -1 sampai 1 supaya minus dikali 100
-        if (typeof val === 'number') return (val <= 1 && val >= -1) ? (val * 100).toFixed(1) : val;
-        str = str.replace('%', '').replace(',', '.');
-        return parseFloat(str) || 0;
-    };
+            let numStr = str.replace(/[^0-9.]/g, '');
+            if (numStr === "") return 0;
+            let num = parseFloat(numStr);
 
-    const reader = new FileReader();
-    reader.onload = (evt) => {
-        try {
-            const data = new Uint8Array(evt.target.result);
-            const workbook = XLSX.read(data, { type: 'array' });
-            const sheet = workbook.Sheets[workbook.SheetNames[0]];
-            const json = XLSX.utils.sheet_to_json(sheet, { header: 1 });
-
-            let dataStartRow = -1;
-            for (let i = 0; i < json.length; i++) {
-                if (json[i][1] && String(json[i][1]).trim().toLowerCase() === 'nama') {
-                    dataStartRow = i + 1; 
-                    break;
-                }
+            let finalPct = 0;
+            if (str.includes('%')) {
+                finalPct = num;
+            } else if (num > 0 && num <= 2) {
+                finalPct = num * 100;
+            } else {
+                finalPct = num;
             }
 
-            if (dataStartRow === -1) {
-                alert("Gagal membaca! Pastikan tulisan 'Nama' ada di Kolom B.");
-                return;
-            }
+            return isNeg ? -Math.abs(finalPct) : Math.abs(finalPct);
+        };
 
-            let investors = [];
-            let history = {};
-            const MONTHS = ['Januari','Februari','Maret','April','Mei','Juni','Juli','Agustus','September','Oktober','November','Desember'];
-            MONTHS.forEach(m => history[m] = { income: 0 });
+        document.getElementById('excelInput').addEventListener('change', async (e) => {
+            const file = e.target.files[0]; if (!file) return;
 
-            for (let i = dataStartRow; i < json.length; i++) {
-                const row = json[i];
-                if (!row || row.length === 0) continue;
+            document.getElementById('statusText').innerText = "Memproses Excel...";
 
-                const nameRaw = row[1]; 
-                if (!nameRaw) break; 
-                if (String(nameRaw).toLowerCase().includes('jumlah')) break; 
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                try {
+                    const data = new Uint8Array(e.target.result);
+                    const workbook = XLSX.read(data, { type: 'array' });
 
-                const shares = cleanMoney(row[2]); 
-
-                let monthly = {};
-                let calculatedSum = 0;
-
-                for (let m = 0; m < 12; m++) {
-                    const moneyIdx = 3 + (m * 2); 
-                    const pctIdx = 4 + (m * 2);   
-
-                    const val = cleanMoney(row[moneyIdx] || 0);
-                    const pct = cleanPercent(row[pctIdx] || 0);
-
-                    monthly[MONTHS[m]] = val;
-                    monthly[MONTHS[m] + '_pct'] = pct;
-                    
-                    calculatedSum += val;
-                    history[MONTHS[m]].income += val; 
-                }
-
-                let finalProfit = cleanMoney(row[27]); 
-                
-                if (finalProfit === 0 && calculatedSum > 0) {
-                    finalProfit = calculatedSum;
-                }
-
-                investors.push({
-                    name: String(nameRaw).trim(),
-                    shares: shares,
-                    monthlyBreakdown: monthly,
-                    profit: finalProfit
-                });
-            }
-
-            if (window.setFirebase && window.dbRef) {
-                window.setFirebase(window.dbRef, {
-                    summary: { lastUpdate: new Date().toLocaleDateString('id-ID') },
-                    investors: investors,
-                    monthlyHistory: history
-                }).then(() => {
-                    alert("Data Excel Berhasil Diupload!");
-                    
-                    // --- BIKIN TAMPILAN OTOMATIS UPDATE TANPA REFRESH ---
-                    if (!window.appData) window.appData = {};
-                    window.appData.investors = investors;
-                    
-                    if (typeof applyMonthFilter === 'function') {
-                        applyMonthFilter(); // Langsung update angka di layar
+                    let json = [];
+                    for (let s = 0; s < workbook.SheetNames.length; s++) {
+                        const sheetData = XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[s]], { header: 1 });
+                        json = json.concat(sheetData);
                     }
-                    // ----------------------------------------------------
-                });
-            }
 
-        } catch (err) {
-            alert("Error: " + err.message);
-        }
-    };
-    reader.readAsArrayBuffer(file);
-});
-        // UTILS
+                    // Pakai nama store yang dipilih di tab saat ini sebagai default
+                    let companyName = storeNames[currentStoreId];
+                    for (let i = 0; i < json.length; i++) {
+                        if (json[i] && json[i][0] && typeof json[i][0] === 'string' && json[i][0].toUpperCase().includes("TARETAN")) {
+                            companyName = json[i][0].toUpperCase();
+                            break;
+                        }
+                    }
+
+                    let tableStarts = [];
+                    for (let i = 0; i < json.length; i++) {
+                        const row = json[i];
+                        if (!row) continue;
+                        const joined = row.join("").toLowerCase();
+                        if (joined.includes("nama") && joined.includes("saham")) {
+                            tableStarts.push(i);
+                        }
+                    }
+
+                    if (tableStarts.length === 0) {
+                        alert("Gagal scan! Tabel Data Investor dengan kolom 'Nama' & 'Saham' tidak ditemukan di dalam Excel.");
+                        document.getElementById('statusText').innerText = "Gagal memproses file.";
+                        document.getElementById('excelInput').value = '';
+                        return;
+                    }
+
+                    let startHeaderIdx = tableStarts[tableStarts.length - 1];
+                    let startDataRow = startHeaderIdx + 1;
+
+                    let bulanRowIdx = -1;
+                    let penghasilanRow = -1;
+                    for (let i = startHeaderIdx; i >= Math.max(0, startHeaderIdx - 15); i--) {
+                        const row = json[i];
+                        if (!row) continue;
+                        const joinedRow = row.join("").toLowerCase();
+
+                        if (bulanRowIdx === -1 && (joinedRow.includes("bulan") || joinedRow.includes("januari") || joinedRow.includes("oktober"))) {
+                            bulanRowIdx = i;
+                        }
+                        if (penghasilanRow === -1 && (joinedRow.includes("pengahasilan") || joinedRow.includes("penghasilan"))) {
+                            penghasilanRow = i;
+                        }
+                    }
+
+                    const headerRowForCols = json[startHeaderIdx];
+                    let nameColIdx = 1;
+                    let sahamColIdx = 2;
+                    for (let c = 0; c < headerRowForCols.length; c++) {
+                        const hStr = String(headerRowForCols[c] || "").toLowerCase().trim();
+                        if (hStr === "nama") nameColIdx = c;
+                        if (hStr.includes("saham")) sahamColIdx = c;
+                    }
+
+                    let colMapping = {};
+                    if (bulanRowIdx !== -1) {
+                        const headerRow = json[bulanRowIdx];
+                        for (let c = 0; c < headerRow.length; c++) {
+                            const cellVal = String(headerRow[c] || "").trim().toLowerCase();
+                            if (!cellVal) continue;
+                            const foundMonth = monthNames.find(m => cellVal.includes(m.toLowerCase()));
+                            if (foundMonth && colMapping[foundMonth] === undefined) {
+                                colMapping[foundMonth] = { profitCol: c, percentCol: c + 1 };
+                            }
+                        }
+                    }
+
+                    let tempList = [];
+                    for (let i = startDataRow; i < json.length; i++) {
+                        const row = json[i];
+                        if (!row) continue;
+
+                        const nameStr = String(row[nameColIdx] || "").trim();
+                        if (nameStr === "") continue;
+                        if (nameStr.toLowerCase().includes("total")) continue;
+
+                        let isWithdrawalRow = nameStr.toLowerCase().includes('pengambilan') ||
+                            nameStr.toLowerCase().includes('tarik') ||
+                            nameStr.toLowerCase().includes('minus');
+
+                        const shares = parseExcelNumber(row[sahamColIdx]);
+
+                        let monthlyData = [];
+                        let monthlyPercent = [];
+                        let totalProfit = 0;
+
+                        monthNames.forEach((m, idx) => {
+                            let val = 0;
+                            let monthPct = 0;
+
+                            if (Object.keys(colMapping).length > 0 && colMapping[m] !== undefined) {
+                                const mapping = colMapping[m];
+                                val = parseExcelNumber(row[mapping.profitCol]);
+                                monthPct = parseExcelPercent(row[mapping.percentCol]);
+                            } else {
+                                const colIndex = 3 + (idx * 2);
+                                const pctColIndex = 4 + (idx * 2);
+                                val = parseExcelNumber(row[colIndex]);
+                                monthPct = parseExcelPercent(row[pctColIndex]);
+                            }
+
+                            if (isWithdrawalRow) {
+                                if (val > 0) val = -val;
+                                if (monthPct > 0) monthPct = -monthPct;
+                            }
+
+                            monthlyData.push(val);
+                            totalProfit += val;
+                            monthlyPercent.push(monthPct);
+                        });
+
+                        tempList.push({
+                            name: nameStr,
+                            shares: Math.abs(shares),
+                            monthlyData: monthlyData,
+                            monthlyPercent: monthlyPercent,
+                            totalProfit: totalProfit
+                        });
+                    }
+
+                    let history = {};
+                    if (penghasilanRow !== -1) {
+                        const pRow = json[penghasilanRow];
+                        monthNames.forEach((m, idx) => {
+                            let inc = 0;
+                            if (Object.keys(colMapping).length > 0 && colMapping[m] !== undefined) {
+                                const mapping = colMapping[m];
+                                inc = parseExcelNumber(pRow[mapping.profitCol]);
+                            } else {
+                                const colIndex = 3 + (idx * 2);
+                                inc = parseExcelNumber(pRow[colIndex]);
+                            }
+                            history[m] = { income: inc };
+                        });
+                    } else {
+                        monthNames.forEach((m, idx) => {
+                            let monthTotal = 0;
+                            tempList.forEach(inv => monthTotal += (inv.monthlyData[idx] || 0));
+                            history[m] = { income: monthTotal };
+                        });
+                    }
+
+                    let investorsObj = {};
+                    tempList.forEach((item, index) => { investorsObj[index] = item; });
+
+                    // Simpan ke database khusus toko yang aktif
+                    window.firebaseSet(window.dbRef, {
+                        summary: {
+                            lastUpdate: new Date().toLocaleDateString('id-ID'),
+                            companyName: companyName
+                        },
+                        investors: investorsObj,
+                        monthlyHistory: history
+                    }).then(() => {
+                        alert(`Berhasil! Data excel untuk toko ${storeNames[currentStoreId]} telah tersimpan di cloud.`);
+                        document.getElementById('excelInput').value = ''; // Reset input
+                    });
+
+                } catch (err) { alert("Error Sistem: " + err.message); console.error(err); }
+            };
+            reader.readAsArrayBuffer(file);
+        });
+
         function switchView(viewId) {
-            // 1. Sembunyikan semua section dulu
-            document.querySelectorAll('.view-section').forEach(el => { 
-                el.classList.add('hidden'); 
-                el.classList.remove('fade-in'); 
-            });
-            
-            // 2. PENGAMAN: Cek apakah section tujuan ada di HTML
+            document.querySelectorAll('.view-section').forEach(el => { el.classList.add('hidden'); el.classList.remove('fade-in'); });
             const activeSection = document.getElementById(`view-${viewId}`);
-            if (activeSection) {
-                activeSection.classList.remove('hidden'); 
-                void activeSection.offsetWidth; 
-                activeSection.classList.add('fade-in');
-            }
-            
-            // 3. Atur warna tombol menu bawah (Mobile)
-            document.querySelectorAll('.mobile-bottom-nav button').forEach(btn => { 
-                btn.classList.remove('text-blue-600', 'bg-blue-50'); 
-                btn.classList.add('text-gray-400'); 
-            });
-            const mobBtn = document.getElementById(`mob-nav-${viewId}`);
-            if(mobBtn) { 
-                mobBtn.classList.remove('text-gray-400'); 
-                mobBtn.classList.add('text-blue-600', 'bg-blue-50'); 
-            }
+            activeSection.classList.remove('hidden'); void activeSection.offsetWidth; activeSection.classList.add('fade-in');
 
-            // 4. Atur warna tombol menu samping (Desktop)
+            document.querySelectorAll('.mobile-bottom-nav button').forEach(btn => { btn.classList.remove('text-blue-600', 'bg-blue-50'); btn.classList.add('text-gray-400'); });
+            const mobBtn = document.getElementById(`mob-nav-${viewId}`);
+            if (mobBtn) { mobBtn.classList.remove('text-gray-400'); mobBtn.classList.add('text-blue-600', 'bg-blue-50'); }
+
             document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('bg-blue-50', 'text-blue-600'));
             const deskBtn = document.getElementById(`nav-${viewId}`);
-            if(deskBtn) {
-                deskBtn.classList.add('bg-blue-50', 'text-blue-600');
-            }
+            if (deskBtn) deskBtn.classList.add('bg-blue-50', 'text-blue-600');
         }
+
         function toggleDarkMode() { document.documentElement.classList.toggle('dark'); localStorage.setItem('theme', document.documentElement.classList.contains('dark') ? 'dark' : 'light'); }
+
         function attemptLogin(role) {
             if (role === 'CEO') {
-                if (prompt("Password CEO:") === PASSWORD_CEO) { document.getElementById('loginOverlay').classList.add('hidden'); document.querySelectorAll('.ceo-only').forEach(el => el.classList.remove('hidden')); document.querySelector('.user-role-display').innerText = "CEO"; } else alert("Password Salah!");
-            } else { document.getElementById('loginOverlay').classList.add('hidden'); document.querySelectorAll('.investor-only').forEach(el => el.classList.remove('hidden')); document.querySelector('.user-role-display').innerText = "Investor"; }
-        }
-        function logout() { location.reload(); }
-        function clearCloudData() { if(confirm("Hapus data?")) window.setFirebase(window.dbRef, null).then(()=>alert("Terhapus.")); }
-        function setPeriod(p) { currentPeriod = p; document.querySelectorAll('.period-btn').forEach(b => { b.classList.remove('active'); b.classList.add('inactive'); if(b.innerText === p) { b.classList.add('active'); b.classList.remove('inactive'); } }); if(window.appData) updateDashboard(window.appData); }
-        function filterMobileList() { const term = document.getElementById('searchMobile').value.toLowerCase(); document.querySelectorAll('.search-item').forEach(item => { item.style.display = item.querySelector('.name-text').innerText.toLowerCase().includes(term) ? 'flex' : 'none'; }); }
-        function downloadPDF() { 
-            const originalTable = document.querySelector("table"); 
-            if (!originalTable) {
-                alert("Tabel data tidak ditemukan untuk dicetak!");
-                return;
+                const passwordInput = document.getElementById('passwordInput').value;
+                if (passwordInput === PASSWORD_CEO) {
+                    document.getElementById('loginOverlay').classList.add('hidden');
+                    document.querySelectorAll('.ceo-only').forEach(el => el.classList.remove('hidden', 'flex-col'));
+                    document.querySelectorAll('.ceo-only').forEach(el => el.classList.add('flex'));
+                    document.querySelectorAll('.user-role-display').forEach(el => el.innerText = "Admin Mode");
+                } else {
+                    alert("Password Salah!");
+                }
+            } else {
+                document.getElementById('loginOverlay').classList.add('hidden');
+                document.querySelectorAll('.investor-only').forEach(el => el.classList.remove('hidden'));
+                document.querySelectorAll('.user-role-display').forEach(el => el.innerText = "Investor");
             }
+        }
 
-            // 1. Bikin bungkus kertas PDF
-            const printContainer = document.createElement("div");
-            printContainer.style.padding = "20px";
-            printContainer.style.fontFamily = "Arial, sans-serif";
+        function logout() { location.reload(); }
 
-            // 2. Judul Laporan (Rata Kiri)
-            const title = document.createElement("h2");
-            title.innerText = "Laporan Keuangan - Taretan Production";
-            title.style.textAlign = "left";
-            title.style.fontSize = "22px";
-            title.style.fontWeight = "bold";
-            title.style.color = "#000000";
-            title.style.margin = "0 0 10px 0";
-
-            // 3. Tanggal Cetak Otomatis
-            const printDate = document.createElement("p");
-            const now = new Date();
-            const d = now.getDate();
-            const m = now.getMonth() + 1;
-            const y = now.getFullYear();
-            const jam = now.getHours().toString().padStart(2, '0');
-            const mnt = now.getMinutes().toString().padStart(2, '0');
-            const dtk = now.getSeconds().toString().padStart(2, '0');
-            
-            printDate.innerText = `Tanggal Cetak: ${d}/${m}/${y}, ${jam}.${mnt}.${dtk}`;
-            printDate.style.textAlign = "left";
-            printDate.style.fontSize = "14px";
-            printDate.style.color = "#000000";
-            printDate.style.margin = "0 0 20px 0";
-
-            // 4. SUNTIKAN CSS WARNA TABEL
-            const style = document.createElement("style");
-            style.innerHTML = `
-                table { width: 100% !important; border-collapse: collapse !important; }
-                th { 
-                    background-color: #155fa0 !important; 
-                    color: #ffffff !important; 
-                    padding: 10px !important; 
-                    text-align: left !important; 
-                    font-weight: bold !important; 
-                    border: 1px solid #155fa0 !important; 
-                }
-                td { 
-                    padding: 10px !important; 
-                    text-align: left !important; 
-                    border: 1px solid #e5e7eb !important; 
-                    color: #000000 !important; 
-                    background-color: #ffffff !important; 
-                }
-                /* Class Merah */
-                .text-merah {
-                    color: #dc2626 !important;
-                    font-weight: bold !important;
-                }
-            `;
-
-            // 5. CLONE TABEL DAN UBAH WARNA (HANYA PERSEN & HASIL)
-            const clonedTable = originalTable.cloneNode(true);
-            const rows = clonedTable.querySelectorAll("tbody tr"); 
-            
-            rows.forEach(row => {
-                const cells = row.querySelectorAll("td");
-                let adaMinus = false;
-                
-                // Cek apakah di baris ini ada angka minus
-                cells.forEach(cell => {
-                    const text = cell.textContent.trim();
-                    if (text.startsWith('-') || text.includes(' -') || text.includes('(-')) {
-                        adaMinus = true; 
-                    }
+        function clearCloudData() {
+            const sName = storeNames[currentStoreId];
+            if (confirm(`Yakin ingin menghapus seluruh data dari toko ${sName}? Laporan di web akan kembali kosong.`)) {
+                window.firebaseSet(window.dbRef, null).then(() => {
+                    alert(`Database ${sName} berhasil dikosongkan!`);
+                }).catch((error) => {
+                    alert("Gagal menghapus data: " + error.message);
                 });
+            }
+        }
 
-                // Kalau baris ini minus dan kolomnya lengkap, MERAHKAN HANYA kolom tertentu
-                if (adaMinus && cells.length >= 4) {
-                    // cells[0] adalah Nama -> Biarkan Hitam
-                    // cells[1] adalah Persenan -> Bikin Merah
-                    cells[1].classList.add("text-merah"); 
-                    
-                    // cells[2] adalah Modal -> Biarkan Hitam
-                    // cells[3] (atau yang paling kanan) adalah Hasil -> Bikin Merah
-                    cells[cells.length - 1].classList.add("text-merah"); 
+        function downloadPDF() {
+            const d = window.appData?.investors ? Object.values(window.appData.investors) : [];
+            const selectedMonth = document.getElementById('monthSelector').value;
+            const periodLabel = document.getElementById('currentPeriodLabel').innerText;
+
+            const { jsPDF } = window.jspdf; const doc = new jsPDF();
+            doc.text(`Laporan Dividen ${storeNames[currentStoreId]} - ${periodLabel}`, 14, 20);
+
+            let totalModal = 0;
+            let totalIncome = 0;
+            d.forEach(r => {
+                totalModal += r.shares;
+                if (selectedMonth === 'total') {
+                    totalIncome += r.totalProfit;
+                } else {
+                    totalIncome += (r.monthlyData[parseInt(selectedMonth)] || 0);
                 }
             });
 
-            // 6. Masukkan semua elemen ke dalam kertas virtual
-            printContainer.appendChild(style);
-            printContainer.appendChild(title);
-            printContainer.appendChild(printDate);
-            printContainer.appendChild(clonedTable); 
+            const body = d.map(r => {
+                let amount = 0;
+                let pctValue = 0;
 
-            // 7. Pengaturan cetak HTML2PDF
-            const opt = {
-                margin:       0.5,
-                filename:     `Laporan_Keuangan_Taretan_${d}-${m}-${y}.pdf`, 
-                image:        { type: 'jpeg', quality: 0.98 },
-                html2canvas:  { scale: 2 }, 
-                jsPDF:        { unit: 'in', format: 'letter', orientation: 'landscape' }
-            };
+                if (selectedMonth === 'total') {
+                    amount = r.totalProfit;
+                    pctValue = totalModal > 0 ? (r.shares / totalModal) * 100 : 0;
+                } else {
+                    const mIdx = parseInt(selectedMonth);
+                    amount = r.monthlyData[mIdx] || 0;
+                    pctValue = (r.monthlyPercent && r.monthlyPercent[mIdx] !== undefined) ? r.monthlyPercent[mIdx] : 0;
+                }
 
-            // 8. Eksekusi PDF!
-            html2pdf().set(opt).from(printContainer).save();
-        }
-        function downloadExcel() { 
-            // 1. Mencari tabel di web
-            const table = document.querySelector("table"); 
-            if (!table) {
-                alert("Tabel data tidak ditemukan untuk didownload!");
-                return;
+                if (amount < 0 && pctValue > 0) pctValue = -pctValue;
+
+                let pctText = Math.abs(pctValue).toFixed(2);
+                if (pctText.endsWith(".00")) pctText = pctText.slice(0, -3);
+                else if (pctText.endsWith("0")) pctText = pctText.slice(0, -1);
+                pctText = (amount < 0 || pctValue < 0 ? "-" : "") + pctText + "%";
+
+                return [r.name.toUpperCase(), pctText, formatRupiah(r.shares), formatRupiah(amount)];
+            });
+
+            const namaTokoPdf = storeNames[currentStoreId] || "TARETAN";
+
+doc.setFontSize(14);
+doc.setFont("helvetica", "bold");
+doc.text(`LAPORAN HASIL DIVIDEN - ${namaTokoPdf}`, 14, 15);
+
+doc.autoTable({
+    startY: 26,
+    head: [['NAMA INVESTOR', 'PERSEN', 'MODAL (Rp)', 'HASIL DIVIDEN']],
+    body: body,
+    didParseCell: function(data) {
+        if (data.section === 'body') {
+            let isiSel = data.cell.text[0] || '';
+            if (isiSel.includes('-')) {
+                data.cell.styles.textColor = [220, 38, 38];
             }
+        }
+    }
+});
 
-            // 2. Mengubah bentuk tabel HTML jadi format buku Excel beneran
-            const workbook = XLSX.utils.table_to_book(table, { sheet: "Laporan Bulan Ini" });
-            
-            // 3. Langsung simpan jadi file .xlsx
-            XLSX.writeFile(workbook, 'Data_Laporan_Taretan.xlsx');
+// Nama file dipertahankan pakai format aslimu biar aman
+doc.save(`Laporan_Saham_${currentStoreId}_${periodLabel.toLowerCase()}.pdf`);
         }
     </script>
 </body>
+
 </html>
