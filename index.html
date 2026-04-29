@@ -133,7 +133,7 @@
 
             <div class="space-y-4">
 
-                <input type="password" id="passwordInput" placeholder="Password Admin"
+                <input type="password" id="passwordInput" placeholder="Password Admin (Investor kosongi saja)"
                     class="w-full px-4 py-3 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 text-gray-800 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none text-center text-sm shadow-inner transition-all mb-2">
 
                 <button onclick="attemptLogin('CEO')"
@@ -270,7 +270,7 @@
                         <div class="absolute -right-6 -top-6 text-purple-500/10 text-8xl"><i
                                 class="fas fa-layer-group"></i></div>
                         <p class="text-xs font-bold text-gray-400 uppercase mb-2">Total Modal Terkumpul</p>
-                        <p class="text-lg md:text-2xl font-black text-gray-800 dark:text-white" id="dashVolume">Rp 0</p>
+                        <p class="text-base sm:text-lg md:text-2xl font-black text-gray-800 dark:text-white tracking-tighter md:tracking-normal truncate" id="dashVolume">Rp 0</p>
                     </div>
                     <div class="glass p-5 rounded-3xl border-l-[6px] border-green-500 relative overflow-hidden group">
                         <div class="absolute -right-6 -top-6 text-green-500/10 text-8xl"><i class="fas fa-users"></i>
@@ -401,7 +401,7 @@
         let unsubscribeDb = null;
         const storeNames = {
             'kamera': 'TARETAN KAMERA',
-            'vapor': 'TARETAN VAPE',
+            'vapor': 'TARETAN VAPOR',
             'vaporte': 'VAPORTE'
         };
 
@@ -495,12 +495,17 @@
 
             investors.forEach(inv => {
                 totalModalKeseluruhan += inv.shares;
+                
+                let amount = 0;
                 if (selectedMonth === 'total') {
-                    totalDisplayedIncome += inv.totalProfit;
+                    amount = inv.totalProfit;
                 } else {
                     const mIdx = parseInt(selectedMonth);
-                    totalDisplayedIncome += (inv.monthlyData && inv.monthlyData[mIdx]) ? inv.monthlyData[mIdx] : 0;
+                    amount = (inv.monthlyData && inv.monthlyData[mIdx]) ? inv.monthlyData[mIdx] : 0;
                 }
+                
+                // JUMLAHKAN SEMUA: Angka minus diubah jadi positif buat totalan dashboard
+                totalDisplayedIncome += Math.abs(amount);
             });
 
             investors.sort((a, b) => b.shares - a.shares);
@@ -530,6 +535,12 @@
                 let isMinus = amount < 0 || pctValue < 0;
                 let textColorAmount = isMinus ? "text-red-500" : "text-green-600";
                 let textColorPercent = isMinus ? "text-red-500" : "text-blue-600";
+
+                // KETERANGAN (DANA DIAMBIL)
+                let keterangan = "";
+                if (amount < 0) {
+                    keterangan = '<br><span class="text-[10px] md:text-xs italic font-normal text-red-500">(Dana Diambil)</span>';
+                }
 
                 // FORMAT PERSENTASE RAPI (Misal -25%)
                 let pctText = Math.abs(pctValue).toFixed(2);
@@ -562,8 +573,8 @@
     </div>
 
     <div class="text-right flex-shrink-0">
-        <p class="font-black ${textColorAmount} text-xs md:text-sm whitespace-nowrap">
-            ${formatRupiah(amount)}
+        <p class="font-black ${textColorAmount} text-xs md:text-sm">
+            ${formatRupiah(amount)} ${keterangan}
         </p>
     </div>
 
@@ -574,7 +585,7 @@
                     <td class="py-4 px-2 font-bold text-gray-800 dark:text-white capitalize">${inv.name.toLowerCase()}</td>
                     <td class="py-4 px-2 text-right ${textColorPercent} font-bold bg-blue-50/50 dark:bg-blue-900/10">${pctText}</td>
                     <td class="py-4 px-2 text-right font-mono text-sm text-gray-600 dark:text-gray-400">${formatRupiah(inv.shares)}</td>
-                    <td class="py-4 px-2 text-right font-black ${textColorAmount}">${formatRupiah(amount)}</td>
+                    <td class="py-4 px-2 text-right font-black ${textColorAmount}">${formatRupiah(amount)} ${keterangan}</td>
                 </tr>`;
             });
 
@@ -902,14 +913,18 @@
             let totalModal = 0;
             let totalIncome = 0;
             d.forEach(r => {
-                totalModal += r.shares;
-                if (selectedMonth === 'total') {
-                    totalIncome += r.totalProfit;
-                } else {
-                    totalIncome += (r.monthlyData[parseInt(selectedMonth)] || 0);
-                }
-            });
+                let amount = 0;
 
+                // Cek ini bulan apa atau total
+                if (selectedMonth === 'total') {
+                    amount = r.totalProfit;
+                } else {
+                    amount = (r.monthlyData[parseInt(selectedMonth)] || 0);
+                }
+
+                // JUMLAHKAN SEMUA: Angka minus diubah jadi positif buat laporan PDF
+                totalIncome += Math.abs(amount);
+            });
             const body = d.map(r => {
                 let amount = 0;
                 let pctValue = 0;
@@ -935,26 +950,26 @@
 
             const namaTokoPdf = storeNames[currentStoreId] || "TARETAN";
 
-doc.setFontSize(14);
-doc.setFont("helvetica", "bold");
-doc.text(`LAPORAN HASIL DIVIDEN - ${namaTokoPdf}`, 14, 15);
+            doc.setFontSize(14);
+            doc.setFont("helvetica", "bold");
+            doc.text(`LAPORAN HASIL DIVIDEN - ${namaTokoPdf}`, 14, 15);
 
-doc.autoTable({
-    startY: 26,
-    head: [['NAMA INVESTOR', 'PERSEN', 'MODAL (Rp)', 'HASIL DIVIDEN']],
-    body: body,
-    didParseCell: function(data) {
-        if (data.section === 'body') {
-            let isiSel = data.cell.text[0] || '';
-            if (isiSel.includes('-')) {
-                data.cell.styles.textColor = [220, 38, 38];
-            }
-        }
-    }
-});
+            doc.autoTable({
+                startY: 26,
+                head: [['NAMA INVESTOR', 'PERSEN', 'MODAL (Rp)', 'HASIL DIVIDEN']],
+                body: body,
+                didParseCell: function (data) {
+                    if (data.section === 'body') {
+                        let isiSel = data.cell.text[0] || '';
+                        if (isiSel.includes('-')) {
+                            data.cell.styles.textColor = [220, 38, 38];
+                        }
+                    }
+                }
+            });
 
-// Nama file dipertahankan pakai format aslimu biar aman
-doc.save(`Laporan_Saham_${currentStoreId}_${periodLabel.toLowerCase()}.pdf`);
+            // Nama file dipertahankan pakai format aslimu biar aman
+            doc.save(`Laporan_Saham_${currentStoreId}_${periodLabel.toLowerCase()}.pdf`);
         }
     </script>
 </body>
