@@ -1964,9 +1964,14 @@
                         let monthlyData = [], monthlyPercent = [], totalProfit = 0;
                         monthNames.forEach((m, idx) => {
                             let val = 0, monthPct = 0;
-                            if (Object.keys(colMapping).length > 0 && colMapping[m] !== undefined) {
-                                val = parseExcelNumber(row[colMapping[m].profitCol]);
-                                monthPct = parseExcelPercent(row[colMapping[m].percentCol]);
+                            if (Object.keys(colMapping).length > 0) {
+                                if (colMapping[m] !== undefined) {
+                                    val = parseExcelNumber(row[colMapping[m].profitCol]);
+                                    monthPct = parseExcelPercent(row[colMapping[m].percentCol]);
+                                } else {
+                                    val = 0;
+                                    monthPct = 0;
+                                }
                             } else {
                                 val = parseExcelNumber(row[3 + (idx * 2)]);
                                 monthPct = parseExcelPercent(row[4 + (idx * 2)]);
